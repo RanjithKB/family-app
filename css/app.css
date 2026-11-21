@@ -60,6 +60,26 @@ textarea.input { min-height: 110px; line-height: 1.4; resize: none; }
 .counter .k { font-size: 12px; font-weight: 700; letter-spacing: .04em; color: #5A4210; }
 .counter .v { margin-top: 4px; font-size: 20px; font-weight: 700; }
 .counter .r { text-align: right; }
+/* Birthdays and anniversaries */
+.celebrate { position: relative; overflow: hidden; margin-top: 16px; padding: 18px 16px 16px; border-radius: 16px; background: linear-gradient(135deg, #FBE3EC, #FBEFD2); border: 1px solid #EBD39B; text-align: center; }
+.celebrate .em { font-size: 40px; line-height: 48px; }
+.celebrate h2 { position: relative; font-size: 22px; line-height: 28px; margin-top: 4px; }
+.celebrate .sub { position: relative; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.celebrate .past { position: relative; display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+.celebrate .past button { width: 64px; aspect-ratio: 4 / 5; border-radius: 10px; overflow: hidden; padding: 0; border: 0; background: #E9E5DC; }
+.celebrate .btn { position: relative; margin-top: 12px; background: rgba(255,255,255,.7); }
+.confetti { position: absolute; inset: 0; pointer-events: none; }
+.confetti i { position: absolute; top: -14px; width: 7px; height: 12px; border-radius: 2px; opacity: 0; }
+html[data-motion="smooth"] .confetti i { animation: confetti 2.6s cubic-bezier(.3,.6,.4,1) .2s both; }
+@keyframes confetti { 0% { opacity: 1; transform: translateY(0) rotate(0); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(240px) rotate(540deg); } }
+.upcoming { margin-top: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px 6px; }
+.upcoming .k { font-size: 12px; font-weight: 700; letter-spacing: .04em; color: var(--muted); }
+.upcoming .ev { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.upcoming .ev + .ev { border-top: 1px solid var(--line); }
+.upcoming .em { font-size: 24px; width: 32px; text-align: center; flex: 0 0 auto; }
+.upcoming .t { font-weight: 600; }
+.upcoming .d { font-size: 12px; color: var(--muted); }
+.upcoming .n { margin-left: auto; flex: 0 0 auto; font-weight: 700; font-size: 12px; padding: 3px 10px; border-radius: 12px; background: #F6E2BC; color: #5A4210; white-space: nowrap; }
 .otd { margin-top: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; cursor: pointer; text-align: left; width: 100%; padding: 0; display: block; }
 .otd .ph { height: 140px; background: #F1D3DC; position: relative; }
 .otd .meta { padding: 10px 14px 12px; }

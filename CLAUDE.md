@@ -6,6 +6,7 @@ Private memories app for exactly two people (a married couple). Android-only PWA
 - Timeline, strictly in date order top to bottom (dates decide above/below the wedding, not chapters): two lanes (each person on their side, shared meetups/engagement memories in the middle, chapter labels at their first date) -> merge at wedding (big swipeable carousel by event, events by date) -> one shared line (married life, "Baby arrives" at the baby date) -> room for future.
 - Photos and caption-only notes (with emojis), optional captions, reactions (heart etc.) on both, author-only edit/delete, age-at-photo tag, crop at upload (thumb cropped 4:5, full photo kept).
 - Own chapters: chapters table + memories.custom_chapter (memory keeps its built-in chapter as fallback). Shown as chapter cards placed by the date of their first memory. Managed in Settings (rename, delete, "Choose memories" picker); Edit details can move one memory. Only the author can move a memory (RLS).
+- Home: celebration banner on birthdays (both, baby) and the wedding anniversary, "Coming up" card (next 30 days), wording depends on who is signed in (js/special.js). Optional baby_name setting. Push notifications not built yet.
 - Lots of animation but smooth on 4 GB mid-range phones: CSS only, opacity/transform, motion modes smooth/light/off.
 
 ## Tech
