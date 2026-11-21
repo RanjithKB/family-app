@@ -167,6 +167,15 @@ function createLive() {
       if (error) throw error;
     },
 
+    // Put memories into one of your chapters (chapterId) or take them out (null).
+    // Row-level security only lets you change memories you added.
+    async setChapter(ids, chapterId) {
+      if (!ids.length) return 0;
+      const { data, error } = await sb.from('memories').update({ custom_chapter: chapterId }).in('id', ids).select('id');
+      if (error) throw error;
+      return data.length;
+    },
+
     async addChapter({ label, lane }) {
       const { data, error } = await sb.from('chapters').insert({ label, lane }).select().single();
       if (error) throw error;
@@ -269,6 +278,7 @@ function createDemo() {
     async listComments(id) { return (comments[id] || []).slice(); },
     async addComment(id, body) { const c = { id: 'c' + Math.random(), memory_id: id, user_id: me.id, body, created_at: new Date().toISOString() }; (comments[id] = comments[id] || []).push(c); return c; },
     async deleteComment(id) { for (const k in comments) comments[k] = comments[k].filter((c) => c.id !== id); },
+    async setChapter(ids, chapterId) { let k = 0; memories.forEach((m) => { if (ids.includes(m.id)) { m.custom_chapter = chapterId; k++; } }); return k; },
     async addChapter({ label, lane }) { const c = { id: 'c' + (++n), label, lane, created_by: me.id, created_at: new Date().toISOString() }; chapters.push(c); return { ...c }; },
     async renameChapter(id, label) { const c = chapters.find((x) => x.id === id); if (c) c.label = label; },
     async deleteChapter(id) { chapters = chapters.filter((c) => c.id !== id); memories.forEach((m) => { if (m.custom_chapter === id) m.custom_chapter = null; }); },

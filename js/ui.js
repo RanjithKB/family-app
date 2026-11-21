@@ -49,6 +49,7 @@ export const clear = (el) => { while (el.firstChild) el.removeChild(el.firstChil
 const svg = (d, extra = '') => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
 export const ICON = {
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
+  check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
   back: svg('<path d="M15 5l-7 7 7 7"/>'),
   more: svg('<circle cx="12" cy="5" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="19" r="1.4" fill="currentColor"/>'),

@@ -138,11 +138,22 @@ img.lz.missing { opacity: 1; background: #E9E5DC; }
 .duo.mid .groupcard.own { margin-top: 0; }
 .chip.add { border-style: dashed; color: #1F5F6E; }
 .chcard.own { border-color: #EBD39B; }
-.chrow { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.chrow .tx { flex: 1; min-width: 0; }
+.chrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.chrow .acts { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.chrow .tx { flex: 1 1 100%; min-width: 0; }
 .chrow .tx b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .btn.sm { flex: 0 0 auto; min-height: 44px; padding: 0 14px; font-size: 14px; }
 .btn.sm.del { color: #A3324F; }
+/* Choosing memories for a chapter */
+.gridlist.pick { padding-bottom: 96px; }
+.gridlist.pick .tile { outline: 3px solid transparent; outline-offset: -3px; transition: outline-color .15s; }
+.gridlist.pick .tile.on { outline-color: var(--gold); }
+.gridlist.pick .tile img { transition: transform .15s; }
+.gridlist.pick .tile.on img { transform: scale(.94); }
+.gridlist.pick .chk { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.85); border: 2px solid #fff; color: transparent; font-size: 14px; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.gridlist.pick .chk svg { width: 16px; height: 16px; }
+.gridlist.pick .tile.on .chk { background: var(--gold); color: var(--ink); }
+.gridlist.pick .when { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 6px 5px; font-size: 11px; line-height: 1.2; color: #fff; text-align: left; background: linear-gradient(transparent, rgba(0,0,0,.55)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .duo .link-l, .duo .link-r { position: absolute; top: 50%; width: 19%; border-top: 2px dotted #8A91A6; }
 .duo.edge .link-l { left: 2px; } .duo.edge .link-r { right: 2px; }
 .dot { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--bg); top: 50%; margin-top: -7px; }
@@ -310,3 +321,4 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
 
 /* Keep long timelines cheap to paint */
 .srow { content-visibility: auto; contain-intrinsic-size: auto 230px; }
+.gridlist.pick .chk svg path { stroke-width: 3; }

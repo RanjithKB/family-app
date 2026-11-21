@@ -4,7 +4,7 @@ import { h, page, lazyImg, ICON } from '../ui.js';
 import { S, reactionInfo, laneName, ownChapterGroups } from '../state.js';
 import { fmtDate, sinceLabel, WEDDING_EVENTS, NOTE_COLORS } from '../dates.js';
 import { openViewer } from './viewer.js';
-import { openAddChooser } from './add.js';
+import { openAddChooser, openChapterPicker } from './add.js';
 
 function topReaction(id) {
   const info = reactionInfo(id);
@@ -33,7 +33,7 @@ function rangeLabel(mems) {
   return a === b ? a : `${a} to ${b}`;
 }
 
-export function openGroup(title, mems) {
+export function openGroup(title, mems, ch) {
   const seq = mems.map((m) => m.id);
   let close;
   const grid = h('div', { class: 'gridlist' }, mems.map((m) => {
@@ -45,15 +45,17 @@ export function openGroup(title, mems) {
   }));
   const holder = h('div', { class: 'inner' },
     h('div', { class: 'pagebar' }, h('button', { class: 'iconbtn', 'aria-label': 'Back', html: ICON.back, onClick: () => close() }), h('h2', null, title), h('span', { style: 'width:44px' })),
-    h('div', { class: 'small muted', style: 'margin-top:4px' }, `${mems.length} memor${mems.length === 1 ? 'y' : 'ies'}`),
+    h('div', { class: 'row between', style: 'margin-top:4px;gap:10px' },
+      h('div', { class: 'small muted' }, `${mems.length} memor${mems.length === 1 ? 'y' : 'ies'}`),
+      ch ? h('button', { class: 'btn ghost sm', type: 'button', onClick: () => openChapterPicker(ch, () => close()) }, 'Choose memories') : null),
     grid);
   close = page(holder).close;
 }
 
-function groupCard(title, mems, small, id) {
+function groupCard(title, mems, small, id, ch) {
   const photos = mems.filter((m) => m.kind === 'photo' && m.thumb_path);
   const strip = h('div', { class: 'strip' }, [0, 1, 2].map((i) => h('div', { class: 'ph' }, photos[i] ? lazyImg(photos[i].thumb_path, '', '') : null)));
-  return h('button', { class: 'groupcard rv' + (small ? ' small' : '') + (id ? ' own' : ''), id, type: 'button', 'aria-label': title, onClick: () => (mems.length ? openGroup(title, mems) : openAddChooser()) },
+  return h('button', { class: 'groupcard rv' + (small ? ' small' : '') + (id ? ' own' : ''), id, type: 'button', 'aria-label': title, onClick: () => (mems.length ? openGroup(title, mems, ch) : openAddChooser()) },
     strip,
     h('div', { class: 'tx' }, h('div', { class: 'cap' }, title), h('div', { class: 'dt' }, mems.length ? `${rangeLabel(mems)} · ${mems.length}` : 'Tap to add')));
 }
@@ -71,7 +73,7 @@ export function renderTimeline(root, opts = {}) {
   const inOwn = new Set(groupsOwn.flatMap((g) => g.mems.map((m) => m.id)));
   const mem = S.memories.filter((m) => !inOwn.has(m.id));
   const ownAt = (homes, lanes) => groupsOwn.filter((g) => homes.includes(g.home) && (!lanes || lanes.includes(g.c.lane)));
-  const ownCard = (g, small) => groupCard(g.c.label, g.mems, small, 'cc-' + g.c.id);
+  const ownCard = (g, small) => groupCard(g.c.label, g.mems, small, 'cc-' + g.c.id, g.c);
   const byDate = (arr) => arr.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
   const by = (ch) => mem.filter((m) => m.chapter === ch);
   const childA = mem.filter((m) => m.chapter === 'childhood' && m.lane === 'a');
