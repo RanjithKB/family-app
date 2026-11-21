@@ -1,7 +1,7 @@
 // Adding memories: chooser, photo crop, details + upload, notes, and editing.
-import { h, page, sheet, closeAllLayers, toast, ICON, EMOJIS, clear } from '../ui.js';
+import { h, page, sheet, closeAllLayers, toast, ICON, EMOJIS, clear, lazyImg } from '../ui.js';
 import { store } from '../store.js';
-import { S, reload, laneName } from '../state.js';
+import { S, reload, laneName, mine } from '../state.js';
 import { CHAPTERS, WEDDING_EVENTS, PRECISIONS, NOTE_COLORS, todayISO, normalizeDate, suggestChapter, fmtDate } from '../dates.js';
 import { loadImage, makeThumb, makeDisplay, fileDateISO } from '../images.js';
 
@@ -338,6 +338,65 @@ export function newChapterSheet(lane, onCreated) {
   setTimeout(() => name.focus(), 250);
 }
 
+// ------------------------------------------------------------------ choose memories for a chapter
+// Tick memories to put them in the chapter, untick to take them out. Only memories you added on
+// the chapter's line can be moved (the app's rule: only the author changes a memory).
+export function openChapterPicker(ch, onDone) {
+  const pool = S.memories.filter((m) => m.lane === ch.lane && mine(m));
+  const others = S.memories.filter((m) => m.lane === ch.lane && !mine(m) && m.custom_chapter !== ch.id).length;
+  const start = new Set(pool.filter((m) => m.custom_chapter === ch.id).map((m) => m.id));
+  const sel = new Set(start);
+  const nameOf = (id) => (S.chapters.find((c) => c.id === id) || {}).label;
+  const holder = h('div', { class: 'inner' });
+  const { close } = page(holder);
+  const saveBtn = h('button', { class: 'btn gold', type: 'button' });
+  const count = h('div', { class: 'small muted', style: 'margin-top:4px' });
+  const refresh = () => {
+    const add = [...sel].filter((id) => !start.has(id)).length, rem = [...start].filter((id) => !sel.has(id)).length;
+    count.textContent = `${sel.size} selected`;
+    saveBtn.textContent = add || rem ? `Save${add ? ` · add ${add}` : ''}${rem ? ` · remove ${rem}` : ''}` : 'Save';
+    saveBtn.disabled = !add && !rem;
+  };
+  const grid = h('div', { class: 'gridlist pick' }, pool.slice().reverse().map((m) => {
+    const elsewhere = m.custom_chapter && m.custom_chapter !== ch.id ? nameOf(m.custom_chapter) : null;
+    const c = NOTE_COLORS[m.note_color] || NOTE_COLORS.gold;
+    const tile = h('button', { class: 'tile' + (sel.has(m.id) ? ' on' : ''), type: 'button', 'aria-pressed': sel.has(m.id) ? 'true' : 'false',
+      'aria-label': `${m.caption || (m.kind === 'note' ? 'Note' : 'Photo')}, ${fmtDate(m.taken_on, m.precision)}${elsewhere ? ', in ' + elsewhere : ''}`,
+      style: m.kind === 'note' ? `background:${c.bg};font-size:30px` : null,
+      onClick: () => {
+        if (sel.has(m.id)) sel.delete(m.id); else sel.add(m.id);
+        tile.classList.toggle('on', sel.has(m.id));
+        tile.setAttribute('aria-pressed', sel.has(m.id) ? 'true' : 'false');
+        refresh();
+      } },
+      m.kind === 'note' ? (m.note_emoji || '💬') : lazyImg(m.thumb_path, '', ''),
+      h('span', { class: 'chk', 'aria-hidden': 'true', html: ICON.check }),
+      h('span', { class: 'when' }, elsewhere ? `${fmtDate(m.taken_on, m.precision === 'day' ? 'month' : m.precision)} · ${elsewhere}` : fmtDate(m.taken_on, m.precision === 'day' ? 'month' : m.precision)));
+    return tile;
+  }));
+  saveBtn.addEventListener('click', async () => {
+    saveBtn.disabled = true;
+    const add = [...sel].filter((id) => !start.has(id)), rem = [...start].filter((id) => !sel.has(id));
+    try {
+      await store.setChapter(add, ch.id);
+      await store.setChapter(rem, null);
+      await reload();
+      close();
+      toast(`${ch.label}: ${sel.size} memor${sel.size === 1 ? 'y' : 'ies'}`);
+      if (onDone) onDone();
+    } catch (e) { refresh(); toast('Could not save: ' + (e.message || 'error'), 5000); }
+  });
+  holder.appendChild(h('div', { class: 'pagebar' },
+    h('button', { class: 'iconbtn', 'aria-label': 'Back', html: ICON.back, onClick: close }),
+    h('h2', null, ch.label),
+    h('span', { style: 'width:44px' })));
+  holder.appendChild(count);
+  holder.appendChild(h('div', { class: 'hint' }, `Tap to put a memory in this chapter, or tap again to take it out. Showing what you added on ${ch.lane === 'together' ? 'your shared line' : laneName(ch.lane) + "'s line"}, newest first.${others ? ` ${others} added by ${ch.lane === 'together' ? 'your partner' : laneName(ch.lane)} can only be moved by them.` : ''}`));
+  holder.appendChild(pool.length ? grid : h('div', { class: 'empty', style: 'margin-top:16px' }, 'Nothing you added on this line yet.'));
+  holder.appendChild(h('div', { class: 'stickybar' }, saveBtn));
+  refresh();
+}
+
 // ------------------------------------------------------------------ notes
 export function openNoteForm(existing) {
   const editing = !!existing;
@@ -421,6 +480,16 @@ export function openPhotoEdit(m, onSaved) {
   const cap = h('input', { class: 'input', type: 'text', maxlength: '140', value: m.caption || '', placeholder: 'Add a caption, or skip', 'aria-label': 'Caption' });
   const df = dateField({ iso: m.taken_on, precision: m.precision });
   const ppl = h('input', { class: 'input', type: 'text', value: (m.people || []).join(', '), 'aria-label': 'Who is in it' });
+  let custom = m.custom_chapter && S.chapters.some((c) => c.id === m.custom_chapter) ? m.custom_chapter : null;
+  const chRow = h('div', { class: 'chips' });
+  const drawCh = () => {
+    clear(chRow);
+    const usual = CHAPTERS.find((c) => c.id === m.chapter);
+    chRow.appendChild(h('button', { type: 'button', class: 'chip' + (!custom ? ' on gold' : ''), onClick: () => { custom = null; drawCh(); } }, usual ? usual.label : 'Usual'));
+    S.chapters.filter((c) => c.lane === m.lane).forEach((c) => chRow.appendChild(h('button', { type: 'button', class: 'chip' + (custom === c.id ? ' on gold' : ''), onClick: () => { custom = c.id; drawCh(); } }, c.label)));
+    chRow.appendChild(h('button', { type: 'button', class: 'chip add', onClick: () => newChapterSheet(m.lane, (c) => { custom = c.id; drawCh(); }) }, '+ New chapter'));
+  };
+  drawCh();
   const save = h('button', { class: 'btn block', type: 'button', style: 'margin-top:22px' }, 'Save changes');
   save.addEventListener('click', async () => {
     save.disabled = true;
@@ -428,7 +497,8 @@ export function openPhotoEdit(m, onSaved) {
     try {
       await store.updateMemory(m.id, {
         caption: cap.value.trim() || null, taken_on: g.iso, precision: g.precision,
-        people: ppl.value.split(',').map((s) => s.trim()).filter(Boolean)
+        people: ppl.value.split(',').map((s) => s.trim()).filter(Boolean),
+        ...((m.custom_chapter || null) !== custom ? { custom_chapter: custom } : {})
       });
       await reload();
       close();
@@ -436,5 +506,5 @@ export function openPhotoEdit(m, onSaved) {
       if (onSaved) onSaved();
     } catch (e) { save.disabled = false; toast('Could not save: ' + (e.message || 'error'), 5000); }
   });
-  close = sheet('Edit details', h('div', null, field('Caption (optional)', cap), field('When was it?', df.el), field('Who is in it?', ppl), save), { tall: true });
+  close = sheet('Edit details', h('div', null, field('Caption (optional)', cap), field('Chapter', chRow), field('When was it?', df.el), field('Who is in it?', ppl), save), { tall: true });
 }

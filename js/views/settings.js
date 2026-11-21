@@ -2,6 +2,7 @@
 import { h, page, sheet, confirmBox, toast, ICON, getMotion, setMotion, clear } from '../ui.js';
 import { S, reload, laneName } from '../state.js';
 import { store } from '../store.js';
+import { openChapterPicker } from './add.js';
 import { CONFIG } from '../config.js';
 
 export function openSettings() {
@@ -56,8 +57,10 @@ export function openSettings() {
       const mineC = store.me && c.created_by === store.me.id;
       chBox.appendChild(h('div', { class: 'chrow' },
         h('div', { class: 'tx' }, h('b', null, c.label), h('div', { class: 'small muted' }, `${laneName(c.lane)} · ${count} memor${count === 1 ? 'y' : 'ies'}`)),
-        mineC ? h('button', { class: 'btn ghost sm', type: 'button', onClick: () => renameChapter(c) }, 'Rename') : null,
-        mineC ? h('button', { class: 'btn ghost sm del', type: 'button', onClick: () => deleteChapter(c, count) }, 'Delete') : null));
+        h('div', { class: 'acts' },
+          h('button', { class: 'btn ghost sm', type: 'button', onClick: () => openChapterPicker(c, drawChapters) }, 'Choose memories'),
+          mineC ? h('button', { class: 'btn ghost sm', type: 'button', onClick: () => renameChapter(c) }, 'Rename') : null,
+          mineC ? h('button', { class: 'btn ghost sm del', type: 'button', onClick: () => deleteChapter(c, count) }, 'Delete') : null)));
     });
   };
   const renameChapter = (c) => {
