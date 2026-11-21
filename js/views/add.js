@@ -3,7 +3,7 @@ import { h, page, sheet, closeAllLayers, toast, ICON, EMOJIS, clear, lazyImg } f
 import { store } from '../store.js';
 import { S, reload, laneName, mine } from '../state.js';
 import { CHAPTERS, WEDDING_EVENTS, PRECISIONS, NOTE_COLORS, todayISO, normalizeDate, suggestChapter, fmtDate } from '../dates.js';
-import { loadImage, makeThumb, makeDisplay, fileDateISO } from '../images.js';
+import { loadImage, makeCopies, fileDateISO } from '../images.js';
 
 const lanes = () => [
   { id: 'a', label: S.names.a, cls: '' },
@@ -186,8 +186,15 @@ function cropFlow(files) {
 
     const last = i === items.length - 1;
     holder.appendChild(h('div', { class: 'stickybar' },
-      h('button', { class: 'btn ghost', style: 'flex:0 0 auto', type: 'button', onClick: () => { items[i].crop = null; if (!last) { items.slice(i + 1).forEach((x) => (x.crop = null)); } cleanup(); details(); } }, last ? 'Skip crop' : 'Auto-crop rest'),
-      h('button', { class: 'btn gold', type: 'button', onClick: () => { items[i].crop = { s: st.s, tx: st.tx, ty: st.ty, frameW: fw, mode: st.mode }; next(); } }, last ? 'Next' : 'Next photo')));
+      h('button', { class: 'btn ghost', style: 'flex:0 0 auto', type: 'button', onClick: async (e) => { busy(e); items[i].crop = null; if (!last) { items.slice(i + 1).forEach((x) => (x.crop = null)); } await keep(i); cleanup(); details(); } }, last ? 'Skip crop' : 'Auto-crop rest'),
+      h('button', { class: 'btn gold', type: 'button', onClick: async (e) => { busy(e); items[i].crop = { s: st.s, tx: st.tx, ty: st.ty, frameW: fw, mode: st.mode }; await keep(i); next(); } }, last ? 'Next' : 'Next photo')));
+  }
+  const busy = (e) => { e.currentTarget.closest('.stickybar').querySelectorAll('button').forEach((b) => (b.disabled = true)); };
+  // The photo is open right now: make its saved copies straight away, so saving never has to open
+  // the big original again (that second open is what failed on phones short of memory).
+  async function keep(i) {
+    if (!current) return;
+    try { items[i].ready = await makeCopies(current, items[i].crop); } catch (_) { /* saving will open it again */ }
   }
   function next() { cleanup(); if (idx + 1 < items.length) show(idx + 1); else details(); }
 
@@ -273,21 +280,24 @@ function openDetails(items, onDone) {
     try {
       for (const it of items) {
         msg.textContent = `Photo ${done + skipped.length + 1} of ${items.length}`;
-        let L;
-        try { L = await loadImage(it.file); } catch (e) { skipped.push(e.message); continue; }
-        try {
-          const thumb = await makeThumb(L.img, L.w, L.h, it.crop);
-          const disp = await makeDisplay(L.img, L.w, L.h);
+        let copies = it.ready;
+        if (!copies) { // not opened on the crop screen (auto-crop): open it now
+          let L;
+          try { L = await loadImage(it.file); } catch (e) { skipped.push(e.message); continue; }
+          try { copies = await makeCopies(L, it.crop); } catch (e) { skipped.push(e.message); continue; } finally { L.release(); }
+        }
+        {
           const iso = g.photo ? fileDateISO(it.file) : g.iso;
           const chapter = form.chapterTouched ? form.chapter : suggestChapter(form.lane, iso, settings);
           const rec = {
             kind: 'photo', lane: form.lane, chapter, event: !form.custom && chapter === 'wedding' ? form.event : null,
             ...(form.custom ? { custom_chapter: form.custom } : {}),
             caption: cap.value.trim() || null, taken_on: iso, precision: g.photo ? 'day' : g.precision,
-            people: ppl, width: disp.width, height: disp.height
+            people: ppl, width: copies.width, height: copies.height
           };
-          await store.addMemory(rec, { thumb, display: disp.blob });
-        } finally { L.release(); }
+          await store.addMemory(rec, { thumb: copies.thumb, display: copies.display });
+          it.ready = null; // let the copies go once uploaded
+        }
         done++;
         prog.style.width = Math.round(((done + skipped.length) / items.length) * 100) + '%';
       }

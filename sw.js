@@ -1,6 +1,6 @@
 // Service worker: keeps a copy of the app for offline use and receives photos shared from the Android gallery.
 // Online, the app's files always come from the network (see networkFirst), so updates show on the next open.
-const VERSION = 'v11';
+const VERSION = 'v12';
 const SHELL = `shell-${VERSION}`;
 const SHARED = 'shared-files';
 const FILES = [
