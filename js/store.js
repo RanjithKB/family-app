@@ -65,7 +65,9 @@ function createLive() {
       if (!data.session) return { state: 'signed-out' };
       user = data.session.user;
       const { data: members, error } = await sb.from('members').select('*');
-      const mine = !error && members && members.find((m) => m.email.toLowerCase() === (user.email || '').toLowerCase());
+      // A database problem is not the same as "not on the list": say what went wrong.
+      if (error) return { state: 'setup-error', email: user.email, message: error.message, code: error.code };
+      const mine = members && members.find((m) => m.email.toLowerCase() === (user.email || '').toLowerCase());
       if (!mine) return { state: 'not-member', email: user.email };
       me = { id: user.id, email: user.email, name: mine.name, lane: mine.lane };
       return { state: 'ready' };

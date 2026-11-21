@@ -96,6 +96,14 @@ create policy members_update on public.members for update to authenticated
 revoke update on public.members from authenticated;
 grant update (name) on public.members to authenticated;
 
+-- Newer Supabase projects don't let the app use new tables until they're granted.
+-- Only signed-in users get access; the row-level security rules above and below still decide
+-- what each person can see or change. Logged-out visitors (anon) get nothing.
+grant usage on schema public to authenticated;
+grant select on public.members to authenticated;
+grant select, insert, update, delete on public.memories, public.reactions, public.comments, public.settings, public.chapters to authenticated;
+grant execute on function public.is_member() to authenticated;
+
 drop policy if exists settings_all on public.settings;
 create policy settings_all on public.settings for all to authenticated
   using (public.is_member()) with check (public.is_member());
