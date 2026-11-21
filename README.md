@@ -36,6 +36,9 @@ Drag the folder onto Cloudflare Pages (Workers & Pages > Create > Pages > Upload
 ## Updating an existing setup
 `supabase/schema.sql` is safe to run again: it only adds what's missing. After pulling a new version, run it once more in the Supabase SQL Editor (for example, to add the table for your own chapters).
 
+## Updates on phones
+The app keeps a copy of itself for offline use, but when online it always loads the latest files, so a new version shows on the next open. If a phone ever looks stuck on an old version: **Settings > Refresh app**, or open `<your site>/reset` (Worker setup only).
+
 ## Keeping your setup out of git
 If your copy of the repo is public, don't commit your real `js/config.js` values, `supabase/members.sql` or any keys. `scripts/check-secrets.sh` blocks real Supabase URLs/keys, `DEMO_MODE: false`, service_role / secret keys, Google client secrets, private keys, GitHub tokens and real emails. It runs in two places:
 - **On your PC before each commit.** Turn it on once per clone: `git config core.hooksPath .githooks`

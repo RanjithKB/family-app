@@ -1,5 +1,6 @@
-// Service worker: caches the app shell and receives photos shared from the Android gallery.
-const VERSION = 'v8';
+// Service worker: keeps a copy of the app for offline use and receives photos shared from the Android gallery.
+// Online, the app's files always come from the network (see networkFirst), so updates show on the next open.
+const VERSION = 'v9';
 const SHELL = `shell-${VERSION}`;
 const SHARED = 'shared-files';
 const FILES = [
@@ -44,19 +45,17 @@ self.addEventListener('fetch', (e) => {
   // Never cache API or private photo requests.
   if (url.origin !== location.origin && !url.hostname.endsWith('esm.sh')) return;
 
-  // Settings (Supabase connection) can change without a new app version: network first, cache only offline.
-  if (url.origin === location.origin && url.pathname.endsWith('/js/config.js')) {
-    e.respondWith(fetch(req).then((res) => {
-      if (res && res.ok) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(req, copy)); }
-      return res;
-    }).catch(() => caches.match(req, { ignoreSearch: true })));
+  // The app's own files: network first, so every open gets the latest version.
+  // The saved copy is used only offline, or when the network takes longer than 4 seconds.
+  if (url.origin === location.origin) {
+    e.respondWith(networkFirst(req, e));
     return;
   }
 
-  // App shell and library: stale-while-revalidate.
+  // The sign-in library from esm.sh: saved copy first (it rarely changes), refreshed in the background.
   e.respondWith((async () => {
     const cache = await caches.open(SHELL);
-    const hit = await cache.match(req, { ignoreSearch: true });
+    const hit = await cache.match(req);
     const net = fetch(req).then((res) => {
       if (res && res.ok) cache.put(req, res.clone());
       return res;
@@ -64,3 +63,23 @@ self.addEventListener('fetch', (e) => {
     return hit || net;
   })());
 });
+
+async function networkFirst(req, e) {
+  const cache = await caches.open(SHELL);
+  const net = fetch(req).then((res) => {
+    if (res && res.ok) cache.put(req, res.clone());
+    return res;
+  });
+  e.waitUntil(net.catch(() => {}));
+  const slow = new Promise((resolve) => setTimeout(resolve, 4000, 'slow'));
+  try {
+    const first = await Promise.race([net, slow]);
+    if (first !== 'slow') return first;
+    // Slow network: show the saved copy if there is one, otherwise keep waiting.
+    return (await cache.match(req, { ignoreSearch: true })) || (await net);
+  } catch (err) {
+    const hit = await cache.match(req, { ignoreSearch: true });
+    if (hit) return hit;
+    throw err;
+  }
+}

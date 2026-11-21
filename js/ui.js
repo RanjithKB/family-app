@@ -23,6 +23,18 @@ const missing = Object.keys(EMOJI_FALLBACK).filter((e) => !canDraw(e));
 const missingRe = missing.length ? new RegExp(missing.join('|'), 'gu') : null;
 export const showEmoji = (s) => (missingRe ? s.replace(missingRe, (m) => EMOJI_FALLBACK[m]) : s);
 
+// Throw away the app's saved copy and load the latest version. Keeps you signed in,
+// your settings and any photos waiting from the Share menu.
+export async function refreshApp() {
+  try { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map((r) => r.unregister())); } catch (_) { /* none */ }
+  try { const keys = await caches.keys(); await Promise.all(keys.filter((k) => k !== 'shared-files').map((k) => caches.delete(k))); } catch (_) { /* none */ }
+  location.replace(location.pathname + '?fresh=' + Date.now());
+}
+// Version of the saved copy, e.g. "v9" (from the service worker's cache name).
+export async function appVersion() {
+  try { const k = (await caches.keys()).find((x) => x.startsWith('shell-')); return k ? k.slice(6) : ''; } catch (_) { return ''; }
+}
+
 export function h(tag, props, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {

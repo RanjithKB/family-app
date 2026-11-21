@@ -6,9 +6,30 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === '/js/config.js') return config(request, env);
+    if (url.pathname === '/reset') return reset();
     return env.ASSETS.fetch(request);
   }
 };
+
+// Emergency refresh for a phone stuck on an old saved copy of the app. No old version has this
+// page saved, so it always comes from here. It removes the saved copy and reopens the app.
+// Sign-in and settings (kept in the browser's local storage) are not touched.
+function reset() {
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex"><title>Refreshing…</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:16px/1.5 system-ui,sans-serif;background:#F8F7F4;color:#1D2540;text-align:center;padding:24px}a{color:#1F5F6E}</style></head>
+<body><div><h1 style="font-size:22px">Refreshing the app…</h1><p id="m">This takes a second.</p><p><a href="/">Open the app</a></p></div>
+<script>
+(async () => {
+  try { const r = await navigator.serviceWorker.getRegistrations(); await Promise.all(r.map((x) => x.unregister())); } catch (e) {}
+  try { const k = await caches.keys(); await Promise.all(k.filter((n) => n !== 'shared-files').map((n) => caches.delete(n))); } catch (e) {}
+  location.replace('/?fresh=' + Date.now());
+})();
+</script></body></html>`;
+  return new Response(html, {
+    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }
+  });
+}
 
 async function config(request, env) {
   const res = await env.ASSETS.fetch(request);

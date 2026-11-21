@@ -35,6 +35,10 @@ Write down each phone's **model and Android version** first.
 - [ ] Close the app for a day and reopen it: you're still signed in and photos still load.
 - [ ] Settings > Export (JSON) downloads a file.
 
+## If the app looks out of date
+- In the app: **Settings > Refresh app**.
+- If you can't get to Settings (or it still shows old screens, like demo mode after switching to real mode): open **`<your site>/reset`** in Chrome. It clears the saved copy and reopens the app. You stay signed in.
+
 ## D. Reporting a problem
 Open an issue (or note it down) with:
 - Phone model and Android version
