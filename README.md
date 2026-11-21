@@ -29,13 +29,11 @@ Drag the folder onto Cloudflare Pages (Workers & Pages > Create > Pages > Upload
 8. **Lock it down.** Turn on Google 2-step verification for both accounts. It is the real lock on your photos.
 
 ## Keeping your setup out of git
-If your copy of the repo is public, don't commit your real `js/config.js` values or emails. A pre-commit hook blocks commits where `config.js` has `DEMO_MODE: false` or a real Supabase URL. Turn it on once per clone:
+If your copy of the repo is public, don't commit your real `js/config.js` values, `supabase/members.sql` or any keys. `scripts/check-secrets.sh` blocks real Supabase URLs/keys, `DEMO_MODE: false`, service_role / secret keys, Google client secrets, private keys, GitHub tokens and real emails. It runs in two places:
+- **On your PC before each commit.** Turn it on once per clone: `git config core.hooksPath .githooks`
+- **On GitHub for every push and pull request** (`.github/workflows/secret-scan.yml`), so it can't be skipped with `--no-verify`.
 
-```
-git config core.hooksPath .githooks
-```
-
-Keep your real values only in the folder you upload. To undo a staged config change: `git restore --staged js/config.js`. If your repo is private and you want to commit them anyway: `git commit --no-verify`.
+Keep your real values only in the folder you upload. To undo a staged file: `git restore --staged js/config.js`. See `SECURITY.md` for which keys are safe and what to do if one leaks.
 
 ## Tech
 - Vanilla ES modules in `js/` (`views/` holds one file per screen), one stylesheet `css/app.css`

@@ -7,3 +7,9 @@ node_modules/
 
 # Your own setup (never commit these in a public repo)
 supabase/members.sql
+
+# Keys and local env
+.env
+.env.*
+*.pem
+*.key

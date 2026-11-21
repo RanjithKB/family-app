@@ -1,17 +1,5 @@
 #!/bin/sh
-# Blocks commits that would publish your own setup in js/config.js.
+# Blocks commits that would publish your own setup or a secret key.
 # Enable once per clone:  git config core.hooksPath .githooks
-# Skip on purpose (e.g. a private fork):  git commit --no-verify
-f=js/config.js
-git diff --cached --name-only | grep -qx "$f" || exit 0
-staged=$(git show ":$f")
-bad=""
-echo "$staged" | grep -Eq "DEMO_MODE:[[:space:]]*false" && bad="DEMO_MODE is false"
-echo "$staged" | grep -Eq "SUPABASE_URL:[[:space:]]*'https://[^']+'" && \
-  ! echo "$staged" | grep -q "YOUR-PROJECT" && bad="${bad:+$bad, }a real SUPABASE_URL is set"
-if [ -n "$bad" ]; then
-  echo "pre-commit: $f has your own setup ($bad)."
-  echo "Keep those values only in the folder you upload to Cloudflare:"
-  echo "  git restore --staged $f"
-  exit 1
-fi
+# The same check runs on GitHub for every push and pull request, so skipping it here won't get a secret merged.
+exec sh scripts/check-secrets.sh --staged
