@@ -1,13 +1,21 @@
 // Image helpers: load, crop to a 4:5 thumbnail, and shrink a display copy. Runs entirely on the phone.
 import { CONFIG } from './config.js';
 
+// Why a photo can't be opened, in words the person can act on.
+export function unreadableReason(file) {
+  const name = (file.name || '').toLowerCase(), type = (file.type || '').toLowerCase();
+  if (!file.size) return "This photo isn't on your phone yet (it may only be in Google Photos online). Open it in Google Photos so it downloads, then try again.";
+  if (/hei[cf]/.test(type) || /\.hei[cf]$/.test(name)) return 'This photo is in HEIC format, which Chrome can’t open yet. Turn off "High efficiency" photos in your camera settings, or pick a JPEG.';
+  return `Could not open this photo (${type || 'unknown type'}, ${(file.size / 1048576).toFixed(1)} MB).`;
+}
+
 export function loadImage(file) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.decoding = 'async';
     img.onload = () => resolve({ img, url, w: img.naturalWidth, h: img.naturalHeight });
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read this photo')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(unreadableReason(file))); };
     img.src = url;
   });
 }
