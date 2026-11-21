@@ -32,10 +32,13 @@ function reset() {
 }
 
 async function config(request, env) {
-  const res = await env.ASSETS.fetch(request);
   const supaUrl = (env.SUPABASE_URL || '').trim();
   const anonKey = (env.SUPABASE_ANON_KEY || '').trim();
-  if (!res.ok || !supaUrl || !anonKey) return res; // not set up yet: demo mode
+  if (!supaUrl || !anonKey) return env.ASSETS.fetch(request); // not set up yet: demo mode
+  // Ask for a clean copy, without the browser's "only if changed" headers. Otherwise a browser
+  // that still has the demo file gets "304 not modified" (the file itself didn't change) and keeps demo mode.
+  const res = await env.ASSETS.fetch(new Request(new URL(request.url), { method: 'GET' }));
+  if (!res.ok) return res;
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(supaUrl)) {
     return new Response('// SUPABASE_URL in Cloudflare should look like https://xxxx.supabase.co\n', { status: 500, headers: { 'content-type': 'text/javascript; charset=utf-8' } });
   }
@@ -46,6 +49,6 @@ async function config(request, env) {
     .replace(/SUPABASE_ANON_KEY:\s*'[^']*'/, `SUPABASE_ANON_KEY: ${JSON.stringify(anonKey)}`);
   if (env.APP_NAME) src = src.replace(/APP_NAME:\s*'[^']*'/, `APP_NAME: ${JSON.stringify(String(env.APP_NAME).slice(0, 40))}`);
   return new Response(src, {
-    headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' }
+    headers: { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }
   });
 }
