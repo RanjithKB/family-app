@@ -1,0 +1,392 @@
+// Adding memories: chooser, photo crop, details + upload, notes, and editing.
+import { h, page, sheet, closeAllLayers, toast, ICON, EMOJIS, clear } from '../ui.js';
+import { store } from '../store.js';
+import { S, reload, laneName } from '../state.js';
+import { CHAPTERS, WEDDING_EVENTS, PRECISIONS, NOTE_COLORS, todayISO, normalizeDate, suggestChapter, fmtDate } from '../dates.js';
+import { loadImage, makeThumb, makeDisplay, fileDateISO } from '../images.js';
+
+const lanes = () => [
+  { id: 'a', label: S.names.a, cls: '' },
+  { id: 'b', label: S.names.b, cls: 'l-b' },
+  { id: 'together', label: 'Together', cls: 'gold' }
+];
+
+// ------------------------------------------------------------------ chooser
+export function openAddChooser() {
+  let close;
+  const opt = (icon, bg, fg, title, desc, onClick, hl) =>
+    h('button', { class: 'opt' + (hl ? ' hl' : ''), type: 'button', onClick },
+      h('span', { class: 'ic', style: `background:${bg};color:${fg}`, html: icon }),
+      h('span', null, h('b', null, title), h('span', { class: 'd' }, desc)));
+
+  const pick = (capture) => {
+    const input = h('input', { type: 'file', accept: 'image/*', multiple: !capture, capture: capture ? 'environment' : null, style: 'display:none' });
+    input.addEventListener('change', () => {
+      const files = [...input.files];
+      input.remove();
+      if (files.length) startPhotos(files);
+    });
+    document.body.appendChild(input);
+    input.click();
+    close();
+  };
+
+  close = sheet('Add to our story', h('div', null,
+    opt(ICON.image, '#CFE5EA', '#0F4A57', 'Photos', 'Pick from your gallery, many at once', () => pick(false)),
+    opt(ICON.camera, '#D6E6D3', '#2D5E29', 'Take a photo', 'Open the camera right now', () => pick(true)),
+    opt(ICON.pen, '#D9922B', '#1D2540', 'Write a note', 'Words and emojis, no photo needed', () => { close(); setTimeout(() => openNoteForm(null), 60); }, true)));
+}
+
+// Photos shared from the Android gallery (see sw.js)
+export async function takeSharedFiles() {
+  try {
+    const cache = await caches.open('shared-files');
+    const files = [];
+    for (const k of await cache.keys()) {
+      const r = await cache.match(k);
+      const b = await r.blob();
+      files.push(new File([b], decodeURIComponent(r.headers.get('X-Name') || 'photo.jpg'), { type: b.type || 'image/jpeg', lastModified: Number(r.headers.get('X-Modified')) || Date.now() }));
+      await cache.delete(k);
+    }
+    return files;
+  } catch (_) { return []; }
+}
+
+export function startPhotos(files) {
+  const imgs = files.filter((f) => !f.type || f.type.startsWith('image/'));
+  if (!imgs.length) { toast('No photos found'); return; }
+  cropFlow(imgs);
+}
+
+// ------------------------------------------------------------------ date field (shared)
+function dateField({ iso = todayISO(), precision = 'day', photoMode = false }) {
+  let mode = photoMode ? 'photo' : precision;
+  const val = { day: iso, month: iso.slice(0, 7), year: iso.slice(0, 4), around: iso.slice(0, 4) };
+  const chips = h('div', { class: 'chips' });
+  const box = h('div', { style: 'margin-top:10px' });
+  const modes = (photoMode ? [{ id: 'photo', label: "Photo's own date" }] : []).concat(PRECISIONS);
+  const api = { el: h('div', null, chips, box), onChange: null };
+  function draw() {
+    clear(chips); clear(box);
+    modes.forEach((m) => chips.appendChild(h('button', { type: 'button', class: 'chip' + (m.id === mode ? ' on' : ''), onClick: () => { mode = m.id; draw(); if (api.onChange) api.onChange(); } }, m.label)));
+    if (mode === 'photo') { box.appendChild(h('div', { class: 'hint' }, 'Each photo uses the date your phone saved. You can change it later.')); return; }
+    const type = mode === 'day' ? 'date' : mode === 'month' ? 'month' : 'number';
+    const inp = h('input', { class: 'input', type, value: val[mode], 'aria-label': 'Date', min: type === 'number' ? '1900' : null, max: type === 'number' ? '2100' : null, inputmode: type === 'number' ? 'numeric' : null });
+    inp.addEventListener('input', () => { val[mode] = inp.value; if (api.onChange) api.onChange(); });
+    box.appendChild(inp);
+    if (mode === 'around') box.appendChild(h('div', { class: 'hint' }, 'For old scans with no date, a rough year is fine.'));
+  }
+  api.get = () => {
+    if (mode === 'photo') return { photo: true };
+    let d;
+    if (mode === 'day') d = val.day || todayISO();
+    else if (mode === 'month') d = (val.month || todayISO().slice(0, 7)) + '-01';
+    else d = `${val.year || todayISO().slice(0, 4)}-01-01`;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) d = todayISO();
+    return { iso: normalizeDate(d, mode), precision: mode };
+  };
+  draw();
+  return api;
+}
+
+const field = (label, ...kids) => h('div', { class: 'field' }, h('span', { class: 'lbl' }, label), ...kids);
+
+// ------------------------------------------------------------------ crop
+function cropFlow(files) {
+  const items = files.map((file) => ({ file, crop: null }));
+  const holder = h('div', { class: 'inner' });
+  const { el, close } = page(holder);
+  el.classList.add('crop-dark');
+  let idx = 0, current = null;
+
+  const cleanup = () => { if (current) { URL.revokeObjectURL(current.url); current = null; } };
+
+  async function show(i) {
+    idx = i;
+    clear(holder);
+    holder.appendChild(h('div', { class: 'pagebar' },
+      h('button', { class: 'iconbtn', 'aria-label': 'Close', html: ICON.close, onClick: () => { cleanup(); close(); } }),
+      h('h2', null, files.length > 1 ? `Crop photo ${i + 1} of ${files.length}` : 'Crop photo'),
+      h('span', { style: 'width:44px' })));
+    holder.appendChild(h('p', { class: 'small', style: 'color:#B8BED2;margin:8px 0 0' }, 'Drag and pinch to choose what shows on the timeline'));
+    const loading = h('div', { class: 'cropbox sk', style: 'width:300px;height:375px' });
+    holder.appendChild(loading);
+    let L;
+    try { L = await loadImage(items[i].file); } catch (e) { toast(e.message); next(null); return; }
+    cleanup(); current = L;
+    const fw = Math.min(innerWidth - 40, 340), fh = fw * 1.25;
+    const st = { mode: 'fill', s: 1, tx: 0, ty: 0 };
+    const image = h('img', { src: L.url, alt: '', style: `width:${L.w}px;height:${L.h}px` });
+    const box = h('div', { class: 'cropbox', style: `width:${fw}px;height:${fh}px` }, image, h('div', { class: 'grid' }));
+    const minS = () => (st.mode === 'fill' ? Math.max(fw / L.w, fh / L.h) : Math.min(fw / L.w, fh / L.h));
+    const apply = () => {
+      const sw = L.w * st.s, sh = L.h * st.s;
+      st.tx = sw <= fw ? (fw - sw) / 2 : Math.min(0, Math.max(fw - sw, st.tx));
+      st.ty = sh <= fh ? (fh - sh) / 2 : Math.min(0, Math.max(fh - sh, st.ty));
+      image.style.transform = `translate(${st.tx}px,${st.ty}px) scale(${st.s})`;
+    };
+    const reset = () => { st.s = minS(); st.tx = (fw - L.w * st.s) / 2; st.ty = (fh - L.h * st.s) / 2; apply(); };
+    reset();
+
+    const pts = new Map();
+    let pinch = null;
+    box.addEventListener('pointerdown', (e) => {
+      box.setPointerCapture(e.pointerId);
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 2) {
+        const [p, q] = [...pts.values()];
+        const r = box.getBoundingClientRect();
+        const cx = (p.x + q.x) / 2 - r.left, cy = (p.y + q.y) / 2 - r.top;
+        pinch = { d: Math.hypot(p.x - q.x, p.y - q.y), s: st.s, px: (cx - st.tx) / st.s, py: (cy - st.ty) / st.s };
+      }
+    });
+    box.addEventListener('pointermove', (e) => {
+      const prev = pts.get(e.pointerId);
+      if (!prev) return;
+      if (pts.size === 1) {
+        st.tx += e.clientX - prev.x; st.ty += e.clientY - prev.y;
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        apply();
+      } else if (pts.size === 2 && pinch) {
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const [p, q] = [...pts.values()];
+        const r = box.getBoundingClientRect();
+        const cx = (p.x + q.x) / 2 - r.left, cy = (p.y + q.y) / 2 - r.top;
+        const d = Math.hypot(p.x - q.x, p.y - q.y);
+        const lo = minS();
+        st.s = Math.min(lo * 5, Math.max(lo, pinch.s * (d / pinch.d)));
+        st.tx = cx - pinch.px * st.s; st.ty = cy - pinch.py * st.s;
+        apply();
+      }
+    });
+    const up = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
+    box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+    box.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const r = box.getBoundingClientRect(), cx = e.clientX - r.left, cy = e.clientY - r.top;
+      const px = (cx - st.tx) / st.s, py = (cy - st.ty) / st.s, lo = minS();
+      st.s = Math.min(lo * 5, Math.max(lo, st.s * (e.deltaY < 0 ? 1.1 : 0.9)));
+      st.tx = cx - px * st.s; st.ty = cy - py * st.s; apply();
+    }, { passive: false });
+
+    const seg = h('div', { class: 'seg' });
+    const drawSeg = () => {
+      clear(seg);
+      for (const m of [['fill', 'Fill'], ['fit', 'Fit']]) seg.appendChild(h('button', { type: 'button', class: st.mode === m[0] ? 'on' : '', onClick: () => { st.mode = m[0]; reset(); drawSeg(); } }, m[1]));
+    };
+    drawSeg();
+
+    holder.replaceChild(box, loading);
+    holder.appendChild(h('div', { class: 'row between', style: 'width:100%;max-width:340px;margin-top:14px;gap:12px' },
+      seg, h('span', { class: 'small', style: 'color:#B8BED2;text-align:right' }, 'Fill crops to the frame.', h('br'), 'Fit keeps the whole photo.')));
+    holder.appendChild(h('p', { class: 'small', style: 'color:#B8BED2;max-width:340px;margin-top:12px' }, 'The full photo is always saved and opens in the photo view. Only the timeline thumbnail is cropped.'));
+
+    const last = i === items.length - 1;
+    holder.appendChild(h('div', { class: 'stickybar' },
+      h('button', { class: 'btn ghost', style: 'flex:0 0 auto', type: 'button', onClick: () => { items[i].crop = null; if (!last) { items.slice(i + 1).forEach((x) => (x.crop = null)); } cleanup(); details(); } }, last ? 'Skip crop' : 'Auto-crop rest'),
+      h('button', { class: 'btn gold', type: 'button', onClick: () => { items[i].crop = { s: st.s, tx: st.tx, ty: st.ty, frameW: fw, mode: st.mode }; next(); } }, last ? 'Next' : 'Next photo')));
+  }
+  function next() { cleanup(); if (idx + 1 < items.length) show(idx + 1); else details(); }
+
+  function details() { openDetails(items, () => { cleanup(); }); }
+  show(0);
+}
+
+// ------------------------------------------------------------------ details + upload
+function openDetails(items, onDone) {
+  const settings = S.settings;
+  const form = { lane: store.me.lane, chapter: null, chapterTouched: false, event: 'ceremony', people: [] };
+  const df = dateField({ photoMode: true });
+  const firstDate = fileDateISO(items[0].file);
+  const holder = h('div', { class: 'inner' });
+  const { el, close } = page(holder);
+
+  const dateNow = () => { const g = df.get(); return g.photo ? firstDate : g.iso; };
+  const auto = () => suggestChapter(form.lane, dateNow(), settings);
+  form.chapter = auto();
+
+  const cap = h('input', { class: 'input', type: 'text', maxlength: '140', placeholder: 'Add a caption, or skip', 'aria-label': 'Caption' });
+  const laneRow = h('div', { class: 'chips' });
+  const chRow = h('div', { class: 'chips' });
+  const evBox = h('div');
+  const people = h('input', { class: 'input', type: 'text', placeholder: 'e.g. Amma, Appa', 'aria-label': 'Who is in it' });
+
+  const draw = () => {
+    if (!form.chapterTouched) form.chapter = auto();
+    clear(laneRow);
+    lanes().forEach((l) => laneRow.appendChild(h('button', { type: 'button', class: 'chip' + (form.lane === l.id ? ` on ${l.cls}` : ''), onClick: () => { form.lane = l.id; draw(); } }, l.label)));
+    clear(chRow);
+    CHAPTERS.forEach((c) => {
+      const disabled = c.id === 'childhood' ? form.lane === 'together' : form.lane !== 'together' && c.id !== 'childhood' && dateNow() < (settings.wedding_date || '0000');
+      chRow.appendChild(h('button', { type: 'button', class: 'chip' + (form.chapter === c.id ? ' on gold' : ''), disabled: disabled && form.chapter !== c.id, onClick: () => { form.chapter = c.id; form.chapterTouched = true; draw(); } }, c.label));
+    });
+    clear(evBox);
+    if (form.chapter === 'wedding') {
+      const row = h('div', { class: 'chips' });
+      WEDDING_EVENTS.forEach((ev) => row.appendChild(h('button', { type: 'button', class: 'chip' + (form.event === ev.id ? ' on gold' : ''), onClick: () => { form.event = ev.id; draw(); } }, ev.label)));
+      evBox.appendChild(field('Which wedding event?', row));
+    }
+  };
+  df.onChange = draw;
+
+  const known = [...new Set(S.memories.flatMap((m) => m.people || []))].slice(0, 6);
+  const sugg = h('div', { class: 'chips', style: 'margin-top:8px' });
+  known.forEach((n) => sugg.appendChild(h('button', { type: 'button', class: 'chip', onClick: () => { const cur = people.value.split(',').map((s) => s.trim()).filter(Boolean); if (!cur.includes(n)) cur.push(n); people.value = cur.join(', '); } }, '+ ' + n)));
+
+  holder.appendChild(h('div', { class: 'pagebar' },
+    h('button', { class: 'iconbtn', 'aria-label': 'Back', html: ICON.back, onClick: close }),
+    h('h2', null, `Memory details${items.length > 1 ? ` (${items.length} photos)` : ''}`),
+    h('span', { style: 'width:44px' })));
+  holder.appendChild(field(items.length > 1 ? 'Caption for all (optional)' : 'Caption (optional)', cap));
+  holder.appendChild(field('Whose line does this belong to?', laneRow, h('div', { class: 'hint' }, 'Together is for meetups and everything after the wedding.')));
+  holder.appendChild(field('Chapter', chRow));
+  holder.appendChild(evBox);
+  holder.appendChild(field('When was it?', df.el));
+  holder.appendChild(field('Who is in it? (optional)', people, known.length ? sugg : null));
+  const save = h('button', { class: 'btn', type: 'button' }, 'Save to timeline');
+  holder.appendChild(h('div', { class: 'stickybar' }, save));
+  draw();
+
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    const prog = h('i');
+    const msg = h('div', { class: 'small muted' }, 'Getting ready…');
+    const box = h('div', { class: 'dialog-wrap' }, h('div', { class: 'backdrop on' }),
+      h('div', { class: 'dialog' }, h('h3', null, 'Adding to your story'), msg, h('div', { class: 'progress' }, prog)));
+    document.body.appendChild(box);
+    const g = df.get();
+    const ppl = people.value.split(',').map((s) => s.trim()).filter(Boolean);
+    let done = 0;
+    try {
+      for (const it of items) {
+        msg.textContent = `Photo ${done + 1} of ${items.length}`;
+        const L = await loadImage(it.file);
+        try {
+          const thumb = await makeThumb(L.img, L.w, L.h, it.crop);
+          const disp = await makeDisplay(L.img, L.w, L.h);
+          const iso = g.photo ? fileDateISO(it.file) : g.iso;
+          const chapter = form.chapterTouched ? form.chapter : suggestChapter(form.lane, iso, settings);
+          const rec = {
+            kind: 'photo', lane: form.lane, chapter, event: chapter === 'wedding' ? form.event : null,
+            caption: cap.value.trim() || null, taken_on: iso, precision: g.photo ? 'day' : g.precision,
+            people: ppl, width: disp.width, height: disp.height
+          };
+          await store.addMemory(rec, { thumb, display: disp.blob });
+        } finally { URL.revokeObjectURL(L.url); }
+        done++;
+        prog.style.width = Math.round((done / items.length) * 100) + '%';
+      }
+      await reload();
+      box.remove();
+      closeAllLayers();
+      if (onDone) onDone();
+      toast(done === 1 ? 'Added to your story' : `Added ${done} photos`);
+    } catch (e) {
+      box.remove();
+      save.disabled = false;
+      await reload().catch(() => {});
+      toast(done ? `Added ${done}. Stopped: ${e.message || 'upload failed'}` : `Could not add: ${e.message || 'upload failed'}`, 5000);
+    }
+  });
+}
+
+// ------------------------------------------------------------------ notes
+export function openNoteForm(existing) {
+  const editing = !!existing;
+  const st = {
+    text: existing ? existing.caption || '' : '',
+    emojis: existing && existing.note_emoji ? splitEmoji(existing.note_emoji) : [],
+    color: (existing && existing.note_color) || 'gold',
+    lane: existing ? existing.lane : 'together',
+    date: existing ? existing.taken_on : todayISO()
+  };
+  const holder = h('div', { class: 'inner' });
+  const { close } = page(holder);
+
+  const ta = h('textarea', { class: 'input', maxlength: '280', placeholder: 'A funny thing she said, a small win, a quiet moment', 'aria-label': 'Note text' });
+  ta.value = st.text;
+  const count = h('div', { class: 'hint', style: 'text-align:right' });
+  const emRow = h('div', { class: 'emrow' });
+  const swRow = h('div', { class: 'swatches' });
+  const laneRow = h('div', { class: 'chips' });
+  const prev = h('div');
+  const dateIn = h('input', { class: 'input', type: 'date', value: st.date, 'aria-label': 'Date' });
+  dateIn.addEventListener('input', () => { st.date = dateIn.value || todayISO(); drawPrev(); });
+
+  function drawPrev() {
+    const c = NOTE_COLORS[st.color];
+    clear(prev);
+    prev.appendChild(h('div', { class: 'ncard', style: `background:${c.bg};border-color:${c.border};width:200px` },
+      h('div', { class: 'em' }, st.emojis.join('') || '💬'),
+      h('div', { class: 'nt' }, st.text || '[Your note appears here]'),
+      h('div', { class: 'dt' }, h('span', null, `${fmtDate(st.date)} · ${laneName(st.lane)}`))));
+  }
+  function draw() {
+    count.textContent = `${st.text.length} / 280`;
+    clear(emRow);
+    EMOJIS.forEach((e) => emRow.appendChild(h('button', { type: 'button', 'aria-label': 'Emoji ' + e, class: st.emojis.includes(e) ? 'on' : '', onClick: () => { st.emojis = st.emojis.includes(e) ? st.emojis.filter((x) => x !== e) : [...st.emojis, e].slice(-3); draw(); } }, e)));
+    clear(swRow);
+    Object.entries(NOTE_COLORS).forEach(([k, c]) => swRow.appendChild(h('button', { type: 'button', 'aria-label': 'Colour ' + k, class: 'sw' + (st.color === k ? ' on' : ''), style: `background:${c.bg}`, onClick: () => { st.color = k; draw(); } })));
+    clear(laneRow);
+    lanes().forEach((l) => laneRow.appendChild(h('button', { type: 'button', class: 'chip' + (st.lane === l.id ? ` on ${l.cls}` : ''), onClick: () => { st.lane = l.id; draw(); } }, l.label)));
+    drawPrev();
+  }
+  ta.addEventListener('input', () => { st.text = ta.value; count.textContent = `${st.text.length} / 280`; drawPrev(); });
+
+  holder.appendChild(h('div', { class: 'pagebar' },
+    h('button', { class: 'iconbtn', 'aria-label': 'Close', html: ICON.close, onClick: close }),
+    h('h2', null, editing ? 'Edit note' : 'Write a note'),
+    h('span', { style: 'width:44px' })));
+  holder.appendChild(field('What do you want to remember?', ta, count));
+  holder.appendChild(field('Add emojis (up to 3)', emRow, h('div', { class: 'hint' }, 'You can also use your keyboard’s emojis in the text.')));
+  holder.appendChild(field('Card colour', swRow));
+  holder.appendChild(field('Whose line?', laneRow));
+  holder.appendChild(field('Date', dateIn));
+  holder.appendChild(field('How it will look on the timeline', prev));
+  const post = h('button', { class: 'btn', type: 'button' }, editing ? 'Save changes' : 'Post note');
+  holder.appendChild(h('div', { class: 'stickybar' }, post));
+  draw();
+
+  post.addEventListener('click', async () => {
+    const text = st.text.trim();
+    if (!text && !st.emojis.length) { toast('Write something or pick an emoji'); return; }
+    post.disabled = true;
+    const chapter = suggestChapter(st.lane, st.date, S.settings);
+    const rec = { lane: st.lane, chapter, caption: text || null, note_emoji: st.emojis.join('') || null, note_color: st.color, taken_on: st.date, precision: 'day' };
+    try {
+      if (editing) await store.updateMemory(existing.id, rec);
+      else await store.addMemory({ kind: 'note', people: [], ...rec }, null);
+      await reload();
+      close();
+      toast(editing ? 'Note updated' : 'Note posted');
+    } catch (e) { post.disabled = false; toast('Could not save: ' + (e.message || 'error'), 5000); }
+  });
+}
+function splitEmoji(s) {
+  const seg = typeof Intl !== 'undefined' && Intl.Segmenter ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s)].map((x) => x.segment) : Array.from(s);
+  return seg.filter((x) => EMOJIS.includes(x) || EMOJIS.includes(x.replace(/️/g, '')) ).slice(0, 3);
+}
+
+// ------------------------------------------------------------------ edit a photo's details
+export function openPhotoEdit(m, onSaved) {
+  let close;
+  const cap = h('input', { class: 'input', type: 'text', maxlength: '140', value: m.caption || '', placeholder: 'Add a caption, or skip', 'aria-label': 'Caption' });
+  const df = dateField({ iso: m.taken_on, precision: m.precision });
+  const ppl = h('input', { class: 'input', type: 'text', value: (m.people || []).join(', '), 'aria-label': 'Who is in it' });
+  const save = h('button', { class: 'btn block', type: 'button', style: 'margin-top:22px' }, 'Save changes');
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    const g = df.get();
+    try {
+      await store.updateMemory(m.id, {
+        caption: cap.value.trim() || null, taken_on: g.iso, precision: g.precision,
+        people: ppl.value.split(',').map((s) => s.trim()).filter(Boolean)
+      });
+      await reload();
+      close();
+      toast('Saved');
+      if (onSaved) onSaved();
+    } catch (e) { save.disabled = false; toast('Could not save: ' + (e.message || 'error'), 5000); }
+  });
+  close = sheet('Edit details', h('div', null, field('Caption (optional)', cap), field('When was it?', df.el), field('Who is in it?', ppl), save), { tall: true });
+}
