@@ -36,6 +36,18 @@ function notMember(email) {
     h('button', { class: 'btn ghost', type: 'button', onClick: async () => { await store.signOut(); location.reload(); } }, 'Sign out'));
 }
 
+function setupError(r) {
+  const hint = r.code === '42501'
+    ? 'The database is not letting the app read its tables. Run supabase/schema.sql again in the Supabase SQL Editor (it adds the missing permissions).'
+    : 'The app could not read the family list. Check your connection, then try again.';
+  centerScreen(
+    h('h1', null, 'Almost there'),
+    h('p', { class: 'muted' }, hint),
+    h('p', { class: 'small muted' }, `Details: ${r.message || 'unknown error'}${r.code ? ` (${r.code})` : ''}`),
+    h('button', { class: 'btn', type: 'button', onClick: () => location.reload() }, 'Try again'),
+    h('button', { class: 'btn ghost', type: 'button', onClick: async () => { await store.signOut(); location.reload(); } }, 'Sign out'));
+}
+
 let tab = 'home';
 let scrollTarget = null;
 let content, nav;
@@ -96,6 +108,7 @@ async function ready() {
     const r = await store.init();
     if (r.state === 'signed-out') signedOut();
     else if (r.state === 'not-member') notMember(r.email);
+    else if (r.state === 'setup-error') setupError(r);
     else await ready();
   } catch (e) {
     centerScreen(h('p', null, 'Something went wrong starting the app.'), h('button', { class: 'btn', type: 'button', onClick: () => location.reload() }, 'Reload'));
