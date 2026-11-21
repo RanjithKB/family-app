@@ -50,7 +50,7 @@ Keep your real values only in the folder you upload. To undo a staged file: `git
 - supabase-js loads from the esm.sh CDN, so first load needs internet.
 - After editing `config.js`, reload twice (the service worker may serve the old file once).
 - Free Supabase projects pause after about a week of no use; open the app weekly or resume it from the dashboard.
-- Not yet tested on a real phone. Issues and pull requests welcome.
+- Not yet tested on a real phone. See `docs/TESTING.md` for the phone test checklist. Issues and pull requests welcome.
 
 ## Roadmap (v2)
 Cloudflare R2 storage (10 GB free) with originals kept, videos, voice notes, offline queue, backup zip, more family members with viewer/contributor roles.
