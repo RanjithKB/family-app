@@ -9,6 +9,7 @@ import { openSettings } from './views/settings.js';
 import { openAddChooser, takeSharedFiles, startPhotos } from './views/add.js';
 
 const app = document.getElementById('app');
+if (new URLSearchParams(location.search).has('fresh')) history.replaceState(null, '', location.pathname);
 document.title = CONFIG.APP_NAME;
 setMotion(getMotion(), false);
 

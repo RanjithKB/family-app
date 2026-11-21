@@ -1,5 +1,5 @@
 // Settings page: name, dates, motion, export, sign out.
-import { h, page, sheet, confirmBox, toast, ICON, getMotion, setMotion, clear } from '../ui.js';
+import { h, page, sheet, confirmBox, toast, ICON, getMotion, setMotion, clear, refreshApp, appVersion } from '../ui.js';
 import { S, reload, laneName } from '../state.js';
 import { store } from '../store.js';
 import { openChapterPicker } from './add.js';
@@ -83,6 +83,8 @@ export function openSettings() {
     catch (e) { toast('Could not delete: ' + (e.message || 'error'), 5000); }
   };
   drawChapters();
+  const versionLine = h('span');
+  appVersion().then((v) => { versionLine.textContent = v ? `Version ${v}.` : ''; });
 
   const saveBtn = h('button', { class: 'btn gold block', type: 'button', onClick: (e) => save(e.currentTarget) }, 'Save');
   const holder = h('div', { class: 'inner' },
@@ -96,6 +98,9 @@ export function openSettings() {
     h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'Backup'),
       h('button', { class: 'btn ghost block', type: 'button', onClick: exportJson }, 'Export notes and details (JSON)'),
       h('div', { class: 'small muted', style: 'margin-top:8px' }, 'Photos stay in your private storage. This saves captions, dates and notes.')),
+    h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'App'),
+      h('button', { class: 'btn ghost block', type: 'button', onClick: (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'Refreshing…'; refreshApp(); } }, 'Refresh app'),
+      h('div', { class: 'small muted', style: 'margin-top:8px' }, versionLine, ' Use this if something looks out of date. You stay signed in and nothing is deleted.')),
     h('div', { class: 'field small muted' }, 'Tip: in Chrome, menu > Install app, to add this to your home screen.'),
     store.mode === 'live' ? h('div', { style: 'margin-top:18px' }, h('button', { class: 'btn ghost block', type: 'button', onClick: async () => { await store.signOut(); location.reload(); } }, 'Sign out')) : h('div', { class: 'small muted', style: 'margin-top:18px' }, 'Demo mode: sample data, nothing is saved.'));
   close = page(holder).close;
