@@ -1,0 +1,16 @@
+# Files that are part of the repo but not the app (never served).
+.git
+.github
+.githooks
+.gitignore
+.gitattributes
+.assetsignore
+.claude
+node_modules
+worker
+scripts
+supabase
+docs
+wrangler.jsonc
+*.md
+LICENSE

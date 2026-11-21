@@ -1,5 +1,5 @@
 // Service worker: caches the app shell and receives photos shared from the Android gallery.
-const VERSION = 'v6';
+const VERSION = 'v7';
 const SHELL = `shell-${VERSION}`;
 const SHARED = 'shared-files';
 const FILES = [
@@ -43,6 +43,15 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   // Never cache API or private photo requests.
   if (url.origin !== location.origin && !url.hostname.endsWith('esm.sh')) return;
+
+  // Settings (Supabase connection) can change without a new app version: network first, cache only offline.
+  if (url.origin === location.origin && url.pathname.endsWith('/js/config.js')) {
+    e.respondWith(fetch(req).then((res) => {
+      if (res && res.ok) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(req, copy)); }
+      return res;
+    }).catch(() => caches.match(req, { ignoreSearch: true })));
+    return;
+  }
 
   // App shell and library: stale-while-revalidate.
   e.respondWith((async () => {

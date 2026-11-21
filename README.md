@@ -25,8 +25,12 @@ Drag the folder onto Cloudflare Pages (Workers & Pages > Create > Pages > Upload
 3. **Members.** Copy `supabase/members.example.sql` to `supabase/members.sql`, put in your two Google emails, and run it. Lane `a` is the first timeline line, `b` the second. `members.sql` is git-ignored so your emails stay out of the repo.
 4. **Google sign-in.** Google Cloud Console > APIs & Services > Credentials > OAuth client (Web). Authorised redirect URI = `https://<your-project>.supabase.co/auth/v1/callback`. Paste the client ID and secret into Supabase > Authentication > Providers > Google.
 5. **Redirect URLs.** Supabase > Authentication > URL Configuration: set Site URL and a Redirect URL to your Cloudflare Pages address.
-6. **Connect.** In `js/config.js` set `DEMO_MODE: false` and paste `SUPABASE_URL` and `SUPABASE_ANON_KEY` (Project settings > API). The anon key is designed to be public; row-level security limits everything to your two member emails.
-7. **Deploy.** Upload the folder to Cloudflare Pages again. Open it on both phones, sign in, then Chrome menu > Install app.
+6. **Connect.** Two ways:
+   - **Cloudflare deploys from GitHub (recommended):** connect your repo in Workers & Pages (it uses `wrangler.jsonc`). Then in your Worker > Settings > Variables and Secrets, add `SUPABASE_URL` and `SUPABASE_ANON_KEY` (Project settings > API in Supabase), and optionally `APP_NAME`. The Worker in `worker/index.js` fills them into `js/config.js` as it's served, so the repo stays in demo mode and no keys are committed.
+   - **Drag-and-drop upload:** in your local copy of `js/config.js` set `DEMO_MODE: false` and paste the two values, then upload the folder. Don't commit that file.
+
+   The anon key is designed to be public; row-level security limits everything to your two member emails.
+7. **Install.** Open the site on both phones, sign in, then Chrome menu > Install app.
 8. **Lock it down.** Turn on Google 2-step verification for both accounts. It is the real lock on your photos.
 
 ## Updating an existing setup
@@ -52,7 +56,6 @@ Keep your real values only in the folder you upload. To undo a staged file: `git
 - Only a display copy (max 1600px) and a cropped thumbnail are stored, not the original files. Supabase free storage is 1 GB, which holds thousands of such photos.
 - No video, voice notes, offline upload queue or full photo backup zip yet (Settings exports notes/details as JSON).
 - supabase-js loads from the esm.sh CDN, so first load needs internet.
-- After editing `config.js`, reload twice (the service worker may serve the old file once).
 - Free Supabase projects pause after about a week of no use; open the app weekly or resume it from the dashboard.
 - Not yet tested on a real phone. See `docs/TESTING.md` for the phone test checklist. Issues and pull requests welcome.
 

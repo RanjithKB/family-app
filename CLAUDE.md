@@ -11,7 +11,7 @@ Private memories app for exactly two people (a married couple). Android-only PWA
 ## Tech
 - No build step. Vanilla ES modules in js/, CSS in css/app.css, service worker sw.js (add new files to its FILES list), manifest with Web Share Target.
 - Backend: Supabase (Google sign-in, Postgres + RLS via members table, private storage bucket, signed URLs). Schema in supabase/schema.sql; member emails go in supabase/members.sql (git-ignored, copied from members.example.sql). js/config.js has DEMO_MODE (sample data in memory).
-- Hosting: Cloudflare Pages (drag-drop upload).
+- Hosting: Cloudflare Workers Builds from GitHub (wrangler.jsonc, static assets + worker/index.js). The Worker only rewrites js/config.js from the SUPABASE_URL / SUPABASE_ANON_KEY / APP_NAME variables set in the dashboard (keep_vars). .assetsignore keeps repo-only files from being served. sw.js fetches config.js network-first. No R2 (needs a payment card; owner declined).
 - Public template repo (MIT). Never commit real config.js values or emails; scripts/check-secrets.sh blocks it, run by .githooks/pre-commit (enable: git config core.hooksPath .githooks) and by the secret-scan GitHub Action. main is protected: changes go through a PR reviewed by the owner (CODEOWNERS). Bump sw.js VERSION when shipping changes.
 - Check JS syntax with: node --input-type=module --check < file.js
 
