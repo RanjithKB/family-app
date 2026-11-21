@@ -136,7 +136,19 @@ img.lz.missing { opacity: 1; background: #E9E5DC; }
 .groupcard.small { width: 46%; }
 /* Your own chapters */
 .groupcard.own .strip { background: #F6E2BC; }
-.col .groupcard, .srow .groupcard { width: 100%; margin: 0; }
+.col .groupcard, .srow .groupcard, .prow .groupcard { width: 100%; margin: 0; }
+/* Before the wedding: one row per memory, in date order. Left = first person, right = second, middle = shared. */
+.duo.pre { padding: 14px 0 6px; }
+.prow { position: relative; display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; padding: 0 20px; margin-bottom: 16px; }
+.prow .c { position: relative; min-width: 0; }
+.prow.a .c { grid-column: 1; } .prow.b .c { grid-column: 2; }
+.prow.t .c { grid-column: 1 / -1; width: 52%; margin: 0 auto; z-index: 1; }
+.prow.a .c::before, .prow.b .c::before { content: ''; position: absolute; top: 28px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg); }
+.prow.a .c::before { left: -26px; background: var(--a); }
+.prow.b .c::before { right: -26px; background: var(--b); }
+.prow.t::before { content: ''; position: absolute; left: 2px; right: 2px; top: 34px; border-top: 2px dotted #8A91A6; }
+.phead { position: relative; z-index: 1; text-align: center; margin: 4px 0 14px; }
+.phead span { display: inline-block; padding: 4px 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--muted); }
 .duo.mid .groupcard.own { margin-top: 0; }
 .chip.add { border-style: dashed; color: #1F5F6E; }
 .chcard.own { border-color: #EBD39B; }

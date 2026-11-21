@@ -1,5 +1,5 @@
-// The timeline: two lanes (one per person) that drift together at the meetups,
-// come close at the engagement, merge at the wedding, then continue as one line.
+// The timeline, in date order top to bottom: two lanes (one per person, shared memories in the middle)
+// that merge at the wedding, then one line.
 import { h, page, lazyImg, ICON } from '../ui.js';
 import { S, reactionInfo, laneName, ownChapterGroups } from '../state.js';
 import { fmtDate, sinceLabel, WEDDING_EVENTS, NOTE_COLORS } from '../dates.js';
@@ -71,20 +71,31 @@ export function renderTimeline(root, opts = {}) {
   // Memories in your own chapters show inside that chapter's card instead of on their own.
   const groupsOwn = ownChapterGroups();
   const inOwn = new Set(groupsOwn.flatMap((g) => g.mems.map((m) => m.id)));
-  const mem = S.memories.filter((m) => !inOwn.has(m.id));
-  const ownAt = (homes, lanes) => groupsOwn.filter((g) => homes.includes(g.home) && (!lanes || lanes.includes(g.c.lane)));
+  const mem = S.memories.filter((m) => !inOwn.has(m.id)); // already in date order
   const ownCard = (g, small) => groupCard(g.c.label, g.mems, small, 'cc-' + g.c.id, g.c);
+  // date order; on the same date a chapter label comes before the memories
   const byDate = (arr) => arr.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : (y.head ? 1 : 0) - (x.head ? 1 : 0)));
-  const by = (ch) => mem.filter((m) => m.chapter === ch);
-  const childA = mem.filter((m) => m.chapter === 'childhood' && m.lane === 'a');
-  const childB = mem.filter((m) => m.chapter === 'childhood' && m.lane === 'b');
-  const meetups = by('meetups'), engagement = by('engagement'), wedding = by('wedding'), married = by('married'), baby = by('baby');
-  const seq = [...childA, ...childB, ...meetups, ...engagement, ...wedding, ...S.memories.filter((m) => !inOwn.has(m.id) && (m.chapter === 'married' || m.chapter === 'baby'))].map((m) => m.id);
+
+  // The timeline is in date order from top to bottom. Everything dated before the wedding sits above it,
+  // everything after below it, whichever chapter it's in. Without any wedding date, the chapter decides.
+  const wedding = mem.filter((m) => m.chapter === 'wedding');
+  const wd = S.settings.wedding_date;
+  const weddingDate = wd || (wedding[0] && wedding[0].taken_on) || null;
+  const PRE = ['childhood', 'meetups', 'engagement'];
+  const isBefore = (date, home) => (weddingDate ? !!date && date < weddingDate : PRE.includes(home));
+  const before = mem.filter((m) => m.chapter !== 'wedding' && isBefore(m.taken_on, m.chapter));
+  const after = mem.filter((m) => m.chapter !== 'wedding' && !isBefore(m.taken_on, m.chapter));
+  const ownBefore = groupsOwn.filter((g) => isBefore(g.date, g.home));
+  const ownAfter = groupsOwn.filter((g) => !ownBefore.includes(g));
+  const byFirst = (x, y) => (x.mems[0].taken_on < y.mems[0].taken_on ? -1 : x.mems[0].taken_on > y.mems[0].taken_on ? 1 : 0);
+  const weddingGroups = WEDDING_EVENTS.map((ev) => ({ ev, mems: wedding.filter((m) => (m.event || 'other') === ev.id) })).filter((g) => g.mems.length).sort(byFirst);
+  // swiping in the photo view follows the same order as the screen
+  const seq = [...before, ...weddingGroups.flatMap((g) => g.mems), ...after].map((m) => m.id);
+
   const W = Math.min(window.innerWidth, 520) - 40;
   const motionOff = () => document.documentElement.dataset.motion === 'off';
   const jump = (id) => { const t = document.getElementById(id); if (t) t.scrollIntoView({ behavior: motionOff() ? 'auto' : 'smooth', block: 'start' }); };
 
-  const wd = S.settings.wedding_date;
   const top = h('div', { class: 'tl-top' },
     h('div', { class: 'row between' }, h('h1', { style: 'font-size:28px;line-height:34px' }, 'Our story'),
       h('button', { class: 'iconbtn', 'aria-label': 'Add a memory', html: ICON.plus, onClick: openAddChooser })),
@@ -94,41 +105,37 @@ export function renderTimeline(root, opts = {}) {
     h('div', { class: 'pills' }, h('span', { class: 'pill a' }, S.names.a), h('span', { class: 'pill b' }, S.names.b)));
 
   const emptyBtn = (text) => h('button', { class: 'empty', type: 'button', style: 'width:100%;background:none', onClick: openAddChooser }, text);
-  const item = (m) => h('div', { class: 'item' }, card(m, seq));
 
-  // A person's column: their memories and their own chapters, in date order.
-  const colItems = (list, lane, emptyText) => {
-    const entries = byDate([
-      ...list.map((m) => ({ date: m.taken_on, el: () => item(m) })),
-      ...ownAt(['childhood'], [lane]).map((g) => ({ date: g.date, el: () => h('div', { class: 'item' }, ownCard(g)) }))
-    ]);
-    return entries.length ? entries.map((e) => e.el()) : emptyBtn(emptyText);
+  // 1. before the wedding: one list in date order. Each person's memories on their own side,
+  //    shared ones (meetups, engagement) in the middle, linked to both lines.
+  const side = (lane) => (lane === 'a' || lane === 'b' ? lane : 't');
+  const label = (ch, text, id) => {
+    const f = before.find((m) => m.chapter === ch);
+    return f ? [{ date: f.taken_on, head: true, id, el: () => h('div', { class: 'phead', id }, h('span', null, `${text} · ${monthYear(f)}`)) }] : [];
   };
+  const labels = [...label('meetups', 'MEETUPS', 'ch-meetups'), ...label('engagement', 'ENGAGEMENT', 'ch-engagement')];
+  const preRows = byDate([
+    ...before.map((m) => ({ date: m.taken_on, side: side(m.lane), el: () => card(m, seq) })),
+    ...ownBefore.map((g) => ({ date: g.date, side: side(g.c.lane), el: () => ownCard(g) })),
+    ...labels
+  ]);
+  const pre = h('div', { class: 'duo edge pre' });
+  if (!before.length && !ownBefore.length) {
+    pre.appendChild(h('div', { class: 'cols' },
+      h('div', { class: 'col a' }, emptyBtn(`Add ${S.names.a}'s first photo`)),
+      h('div', { class: 'col b' }, emptyBtn(`Add ${S.names.b}'s first photo`))));
+  }
+  preRows.forEach((e) => pre.appendChild(e.head ? e.el() : h('div', { class: 'prow ' + e.side }, h('div', { class: 'c' }, e.el()))));
+  const childhood = h('div', { class: 'stage', id: 'ch-childhood' }, pre);
+  const has = (id) => labels.some((l) => l.id === id);
 
-  // 1. childhood: two lanes side by side
-  const childhood = h('div', { class: 'stage', id: 'ch-childhood' },
-    h('div', { class: 'duo edge' }, h('div', { class: 'cols' },
-      h('div', { class: 'col a' }, colItems(childA, 'a', `Add ${S.names.a}'s first photo`)),
-      h('div', { class: 'col b' }, colItems(childB, 'b', `Add ${S.names.b}'s first photo`)))));
-
-  // 2. meetups, lanes still apart, a shared card between them
-  const meet = h('div', { class: 'stage', id: 'ch-meetups' },
-    h('div', { class: 'duo edge', style: 'min-height:170px' },
-      h('i', { class: 'dot a' }), h('i', { class: 'dot b' }), h('i', { class: 'link-l' }), h('i', { class: 'link-r' }),
-      groupCard('Unofficial meetups', meetups)));
-  // your own shared chapters from before the engagement sit between the two lines
-  const meetOwn = ownAt(['meetups']);
-  const meetMore = meetOwn.length ? h('div', { class: 'stage' }, h('div', { class: 'duo edge' }, byDate(meetOwn).map((g) => ownCard(g)))) : null;
-
-  // 3. lanes drift in, engagement card between them, then merge
-  const drift = h('div', { class: 'stage' }, curve(W, 2, W * 0.28, W - 2, W * 0.72, 80));
-  const engage = h('div', { class: 'stage', id: 'ch-engagement' },
-    h('div', { class: 'duo mid', style: 'min-height:150px' }, groupCard('Engagement', engagement, true), byDate(ownAt(['engagement'])).map((g) => ownCard(g, true))));
-  const merge = h('div', { class: 'stage' }, curve(W, W * 0.28, W * 0.5, W * 0.72, W * 0.5, 120, 'merge'));
+  // 2. the two lines come together at the wedding
+  const merge = h('div', { class: 'stage', id: has('ch-meetups') ? null : 'ch-meetups' },
+    h('span', { id: has('ch-engagement') ? null : 'ch-engagement' }),
+    curve(W, 2, W * 0.5, W - 2, W * 0.5, 140, 'merge'));
 
   // 4. wedding: swipeable carousel by event
-  const weddingDate = wd || (wedding[0] && wedding[0].taken_on);
-  const groups = WEDDING_EVENTS.map((ev) => ({ ev, mems: wedding.filter((m) => (m.event || 'other') === ev.id) })).filter((g) => g.mems.length);
+  const groups = weddingGroups;
   const slides = h('div', { class: 'slides' });
   if (!groups.length) {
     slides.appendChild(h('button', { class: 'slide', type: 'button', onClick: openAddChooser },
@@ -158,23 +165,22 @@ export function renderTimeline(root, opts = {}) {
     h('div', { class: 'wedhead' }, h('div', { class: 'node' }), h('div', { class: 'lab' }, 'WEDDING DAY' + (weddingDate ? ' · ' + fmtDate(weddingDate) : ''))),
     h('div', { class: 'carousel rv' }, slides, n > 1 ? cnt : null, n > 1 ? dots : null));
 
-  // 5. one shared line: married life, then baby
+  // 5. one shared line after the wedding, in date order, alternating sides. "Baby arrives" sits at the baby's date.
   const solo = h('div', { class: 'solo', id: 'ch-married' });
   let k = 0;
-  // memories and your own chapters, in date order, alternating sides of the line
-  // One date order for the whole line, whichever chapter a memory is in. "Baby arrives" sits at the baby's date.
-  if (!married.length && !baby.length && !ownAt(['wedding', 'married', 'baby']).length) solo.appendChild(h('div', { style: 'padding:6px 0 18px;position:relative;z-index:2' }, emptyBtn('Your life together starts here. Add the first memory.')));
+  const baby = after.filter((m) => m.chapter === 'baby');
+  if (!after.length && !ownAfter.length) solo.appendChild(h('div', { style: 'padding:6px 0 18px;position:relative;z-index:2' }, emptyBtn('Your life together starts here. Add the first memory.')));
   const bd = S.settings.baby_date || (baby[0] && baby[0].taken_on);
   const babyHead = bd ? [{ date: bd, head: true, el: () => h('div', { class: 'babyhead', id: 'ch-baby' },
     h('div', { class: 'node' }), h('div', { class: 'lab' }, 'BABY ARRIVES'), h('div', null, h('span', { class: 'sub' }, `${fmtDate(bd)} · ${sinceLabel(bd)} old`))) }] : [];
   byDate([
-    ...[...married, ...baby].map((m) => ({ date: m.taken_on, el: () => card(m, seq) })),
-    ...ownAt(['wedding', 'married', 'baby']).map((g) => ({ date: g.date, el: () => ownCard(g) })),
+    ...after.map((m) => ({ date: m.taken_on, el: () => card(m, seq) })),
+    ...ownAfter.map((g) => ({ date: g.date, el: () => ownCard(g) })),
     ...babyHead
   ]).forEach((e) => solo.appendChild(e.head ? e.el() : h('div', { class: 'srow ' + (k++ % 2 ? 'r' : 'l') }, h('div', { class: 'c' }, e.el()))));
   const future = h('div', { class: 'stage' }, h('div', { class: 'future' }, h('button', { class: 'btn ghost', type: 'button', onClick: openAddChooser }, '+ Add a photo or a note')));
 
-  const tl = h('div', { class: 'tl' }, top, childhood, meet, meetMore, drift, engage, merge, wed, h('div', { class: 'stage' }, solo), future);
+  const tl = h('div', { class: 'tl' }, top, childhood, merge, wed, h('div', { class: 'stage' }, solo), future);
   root.appendChild(tl);
   if (opts.scrollTo) requestAnimationFrame(() => { const t = document.getElementById(opts.scrollTo); if (t) t.scrollIntoView({ block: 'start' }); });
 }
