@@ -5,6 +5,8 @@
 //  3. Leave DEMO_MODE as true to try the app with sample data first.
 // ---------------------------------------------------------------
 export const CONFIG = {
+  // Your app's name, shown on the sign-in screen and browser tab.
+  // Also change "name" and "short_name" in manifest.webmanifest (that's the home-screen label).
   APP_NAME: 'Family Memories',
 
   // true  = sample data in memory, no sign-in (resets on reload). Good for a first look.

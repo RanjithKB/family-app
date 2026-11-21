@@ -9,8 +9,9 @@ Private memories app for exactly two people (a married couple). Android-only PWA
 
 ## Tech
 - No build step. Vanilla ES modules in js/, CSS in css/app.css, service worker sw.js (add new files to its FILES list), manifest with Web Share Target.
-- Backend: Supabase (Google sign-in, Postgres + RLS via members table, private storage bucket, signed URLs). Schema in supabase/schema.sql. js/config.js has DEMO_MODE (sample data in memory).
+- Backend: Supabase (Google sign-in, Postgres + RLS via members table, private storage bucket, signed URLs). Schema in supabase/schema.sql; member emails go in supabase/members.sql (git-ignored, copied from members.example.sql). js/config.js has DEMO_MODE (sample data in memory).
 - Hosting: Cloudflare Pages (drag-drop upload).
+- Public template repo (MIT). Never commit real config.js values or emails; .githooks/pre-commit blocks it (enable: git config core.hooksPath .githooks). Bump sw.js VERSION when shipping changes.
 - Check JS syntax with: node --input-type=module --check < file.js
 
 ## Next (v2 ideas)

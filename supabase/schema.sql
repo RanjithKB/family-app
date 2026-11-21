@@ -1,8 +1,8 @@
 -- =====================================================================
 --  Family Memories: database + storage setup
 --  Run this whole file once in Supabase: SQL Editor > New query > Run.
---  BEFORE running: replace the two example emails at the bottom with
---  the Google accounts of you and your spouse.
+--  It contains no personal data. After it, run your own members.sql
+--  (see supabase/members.example.sql) to add your two Google accounts.
 -- =====================================================================
 
 -- People allowed in (exactly two). lane 'a' and 'b' are your two timeline lines.
@@ -137,10 +137,5 @@ create policy photos_insert on storage.objects for insert to authenticated
 create policy photos_delete on storage.objects for delete to authenticated
   using (bucket_id = 'photos' and public.is_member());
 
--- ---------------------------------------------------------------------
---  EDIT THESE TWO ROWS: your Google emails. 'a' is the first timeline line, 'b' the second.
--- ---------------------------------------------------------------------
-insert into public.members (email, name, lane) values
-  ('you@gmail.com',    'You',    'a'),
-  ('spouse@gmail.com', 'Spouse', 'b')
-on conflict (email) do nothing;
+-- Next: add your two Google accounts by running supabase/members.sql
+-- (copy it from supabase/members.example.sql first).

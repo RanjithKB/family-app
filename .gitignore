@@ -4,3 +4,6 @@ Thumbs.db
 node_modules/
 .env
 .claude/settings.local.json
+
+# Your own setup (never commit these in a public repo)
+supabase/members.sql
