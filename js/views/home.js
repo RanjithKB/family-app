@@ -1,6 +1,6 @@
 // Home: counters, "on this day", chapter rail, recently added.
 import { h, lazyImg, avatar } from '../ui.js';
-import { S } from '../state.js';
+import { S, ownChapterGroups } from '../state.js';
 import { sinceLabel, fmtDate, todayISO, CHAPTERS } from '../dates.js';
 import { openViewer } from './viewer.js';
 import { openAddChooser } from './add.js';
@@ -37,13 +37,17 @@ export function renderHome(root, { goTimeline, openSettings }) {
   // chapter rail
   root.appendChild(h('div', { class: 'sec' }, h('h2', null, 'Chapters'), h('button', { class: 'link', type: 'button', onClick: () => goTimeline() }, 'Open timeline')));
   const target = { childhood: 'ch-childhood', meetups: 'ch-meetups', engagement: 'ch-engagement', wedding: 'ch-wedding', married: 'ch-married', baby: 'ch-baby' };
-  root.appendChild(h('div', { class: 'rail' }, CHAPTERS.map((c) => {
-    const list = mem.filter((m) => m.chapter === c.id);
+  const own = ownChapterGroups().sort((x, y) => (x.date < y.date ? -1 : 1));
+  const inOwn = new Set(own.flatMap((g) => g.mems.map((m) => m.id)));
+  const chCard = (label, list, to, cls = '') => {
     const cover = list.find((m) => m.kind === 'photo' && m.thumb_path);
-    return h('button', { class: 'chcard' + (c.id === 'wedding' ? ' wed' : ''), type: 'button', onClick: () => goTimeline(target[c.id]) },
+    return h('button', { class: 'chcard' + cls, type: 'button', onClick: () => goTimeline(to) },
       h('div', { class: 'ph' }, cover ? lazyImg(cover.thumb_path, '', '') : null),
-      h('div', { class: 't' }, c.label, h('small', null, `${list.length} memor${list.length === 1 ? 'y' : 'ies'}`)));
-  })));
+      h('div', { class: 't' }, label, h('small', null, `${list.length} memor${list.length === 1 ? 'y' : 'ies'}`)));
+  };
+  root.appendChild(h('div', { class: 'rail' },
+    CHAPTERS.map((c) => chCard(c.label, mem.filter((m) => m.chapter === c.id && !inOwn.has(m.id)), target[c.id], c.id === 'wedding' ? ' wed' : '')),
+    own.map((g) => chCard(g.c.label, g.mems, 'cc-' + g.c.id, ' own'))));
 
   // recent
   const recent = mem.slice().sort((x, y) => (y.created_at || '').localeCompare(x.created_at || '')).slice(0, 9);

@@ -1,6 +1,6 @@
 // Settings page: name, dates, motion, export, sign out.
-import { h, page, toast, ICON, getMotion, setMotion } from '../ui.js';
-import { S, reload } from '../state.js';
+import { h, page, sheet, confirmBox, toast, ICON, getMotion, setMotion, clear } from '../ui.js';
+import { S, reload, laneName } from '../state.js';
 import { store } from '../store.js';
 import { CONFIG } from '../config.js';
 
@@ -41,10 +41,45 @@ export function openSettings() {
   };
 
   const exportJson = () => {
-    const data = JSON.stringify({ exported: new Date().toISOString(), settings: S.settings, members: S.members, memories: S.memories, reactions: S.reactions }, null, 2);
+    const data = JSON.stringify({ exported: new Date().toISOString(), settings: S.settings, members: S.members, chapters: S.chapters, memories: S.memories, reactions: S.reactions }, null, 2);
     const a = h('a', { href: URL.createObjectURL(new Blob([data], { type: 'application/json' })), download: 'our-memories.json' });
     document.body.appendChild(a); a.click(); a.remove();
   };
+
+  // Your own chapters: rename or delete the ones you made.
+  const chBox = h('div');
+  const drawChapters = () => {
+    clear(chBox);
+    if (!S.chapters.length) { chBox.appendChild(h('div', { class: 'small muted' }, 'None yet. Add one with "+ New chapter" when you add photos.')); return; }
+    S.chapters.forEach((c) => {
+      const count = S.memories.filter((m) => m.custom_chapter === c.id).length;
+      const mineC = store.me && c.created_by === store.me.id;
+      chBox.appendChild(h('div', { class: 'chrow' },
+        h('div', { class: 'tx' }, h('b', null, c.label), h('div', { class: 'small muted' }, `${laneName(c.lane)} · ${count} memor${count === 1 ? 'y' : 'ies'}`)),
+        mineC ? h('button', { class: 'btn ghost sm', type: 'button', onClick: () => renameChapter(c) }, 'Rename') : null,
+        mineC ? h('button', { class: 'btn ghost sm del', type: 'button', onClick: () => deleteChapter(c, count) }, 'Delete') : null));
+    });
+  };
+  const renameChapter = (c) => {
+    let closeS;
+    const inp = h('input', { class: 'input', type: 'text', maxlength: '40', value: c.label, 'aria-label': 'Chapter name' });
+    const ok = h('button', { class: 'btn gold block', type: 'button', style: 'margin-top:18px' }, 'Save name');
+    ok.addEventListener('click', async () => {
+      const label = inp.value.trim().replace(/\s+/g, ' ');
+      if (!label) { toast('Give the chapter a name'); return; }
+      ok.disabled = true;
+      try { await store.renameChapter(c.id, label); await reload(); drawChapters(); closeS(); toast('Renamed'); }
+      catch (e) { ok.disabled = false; toast('Could not rename: ' + (e.message || 'error'), 5000); }
+    });
+    closeS = sheet('Rename chapter', h('div', null, inp, ok));
+  };
+  const deleteChapter = async (c, count) => {
+    const yes = await confirmBox(`Delete "${c.label}"?`, count ? `Its ${count} memor${count === 1 ? 'y' : 'ies'} stay in your story and move back to their usual chapter.` : 'This chapter has no memories.');
+    if (!yes) return;
+    try { await store.deleteChapter(c.id); await reload(); drawChapters(); toast('Chapter deleted'); }
+    catch (e) { toast('Could not delete: ' + (e.message || 'error'), 5000); }
+  };
+  drawChapters();
 
   const saveBtn = h('button', { class: 'btn gold block', type: 'button', onClick: (e) => save(e.currentTarget) }, 'Save');
   const holder = h('div', { class: 'inner' },
@@ -54,6 +89,7 @@ export function openSettings() {
     h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'Animations'), seg,
       h('div', { class: 'small muted', style: 'margin-top:8px' }, 'Use Light or Off if the app ever feels slow.')),
     h('div', { style: 'margin-top:24px' }, saveBtn),
+    h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'Your own chapters'), chBox),
     h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'Backup'),
       h('button', { class: 'btn ghost block', type: 'button', onClick: exportJson }, 'Export notes and details (JSON)'),
       h('div', { class: 'small muted', style: 'margin-top:8px' }, 'Photos stay in your private storage. This saves captions, dates and notes.')),

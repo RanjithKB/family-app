@@ -201,7 +201,7 @@ function cropFlow(files) {
 // ------------------------------------------------------------------ details + upload
 function openDetails(items, onDone) {
   const settings = S.settings;
-  const form = { lane: store.me.lane, chapter: null, chapterTouched: false, event: 'ceremony', people: [] };
+  const form = { lane: store.me.lane, chapter: null, chapterTouched: false, custom: null, event: 'ceremony', people: [] };
   const df = dateField({ photoMode: true });
   const firstDate = fileDateISO(items[0].file);
   const holder = h('div', { class: 'inner' });
@@ -220,14 +220,17 @@ function openDetails(items, onDone) {
   const draw = () => {
     if (!form.chapterTouched) form.chapter = auto();
     clear(laneRow);
-    lanes().forEach((l) => laneRow.appendChild(h('button', { type: 'button', class: 'chip' + (form.lane === l.id ? ` on ${l.cls}` : ''), onClick: () => { form.lane = l.id; draw(); } }, l.label)));
+    lanes().forEach((l) => laneRow.appendChild(h('button', { type: 'button', class: 'chip' + (form.lane === l.id ? ` on ${l.cls}` : ''), onClick: () => { form.lane = l.id; if (form.custom && (S.chapters.find((c) => c.id === form.custom) || {}).lane !== l.id) form.custom = null; draw(); } }, l.label)));
     clear(chRow);
     CHAPTERS.forEach((c) => {
       const disabled = c.id === 'childhood' ? form.lane === 'together' : form.lane !== 'together' && c.id !== 'childhood' && dateNow() < (settings.wedding_date || '0000');
-      chRow.appendChild(h('button', { type: 'button', class: 'chip' + (form.chapter === c.id ? ' on gold' : ''), disabled: disabled && form.chapter !== c.id, onClick: () => { form.chapter = c.id; form.chapterTouched = true; draw(); } }, c.label));
+      chRow.appendChild(h('button', { type: 'button', class: 'chip' + (!form.custom && form.chapter === c.id ? ' on gold' : ''), disabled: disabled && form.chapter !== c.id, onClick: () => { form.custom = null; form.chapter = c.id; form.chapterTouched = true; draw(); } }, c.label));
     });
+    // Your own chapters for this line, then a way to make a new one.
+    S.chapters.filter((c) => c.lane === form.lane).forEach((c) => chRow.appendChild(h('button', { type: 'button', class: 'chip' + (form.custom === c.id ? ' on gold' : ''), onClick: () => { form.custom = c.id; form.chapterTouched = false; draw(); } }, c.label)));
+    chRow.appendChild(h('button', { type: 'button', class: 'chip add', onClick: () => newChapterSheet(form.lane, (c) => { form.custom = c.id; form.chapterTouched = false; draw(); }) }, '+ New chapter'));
     clear(evBox);
-    if (form.chapter === 'wedding') {
+    if (!form.custom && form.chapter === 'wedding') {
       const row = h('div', { class: 'chips' });
       WEDDING_EVENTS.forEach((ev) => row.appendChild(h('button', { type: 'button', class: 'chip' + (form.event === ev.id ? ' on gold' : ''), onClick: () => { form.event = ev.id; draw(); } }, ev.label)));
       evBox.appendChild(field('Which wedding event?', row));
@@ -275,7 +278,8 @@ function openDetails(items, onDone) {
           const iso = g.photo ? fileDateISO(it.file) : g.iso;
           const chapter = form.chapterTouched ? form.chapter : suggestChapter(form.lane, iso, settings);
           const rec = {
-            kind: 'photo', lane: form.lane, chapter, event: chapter === 'wedding' ? form.event : null,
+            kind: 'photo', lane: form.lane, chapter, event: !form.custom && chapter === 'wedding' ? form.event : null,
+            ...(form.custom ? { custom_chapter: form.custom } : {}),
             caption: cap.value.trim() || null, taken_on: iso, precision: g.photo ? 'day' : g.precision,
             people: ppl, width: disp.width, height: disp.height
           };
@@ -303,6 +307,35 @@ function openDetails(items, onDone) {
       toast(done ? `Added ${done}. Stopped: ${e.message || 'upload failed'}` : `Could not add: ${e.message || 'upload failed'}`, 5000);
     }
   });
+}
+
+// ------------------------------------------------------------------ new chapter
+export function newChapterSheet(lane, onCreated) {
+  let close;
+  const name = h('input', { class: 'input', type: 'text', maxlength: '40', placeholder: 'e.g. College, First home, Road trips', 'aria-label': 'Chapter name', enterkeyhint: 'done' });
+  const create = h('button', { class: 'btn gold block', type: 'button', style: 'margin-top:18px' }, 'Create chapter');
+  const where = lane === 'together' ? 'your shared line' : `${laneName(lane)}'s line`;
+  const go = async () => {
+    const label = name.value.trim().replace(/\s+/g, ' ');
+    if (!label) { toast('Give the chapter a name'); name.focus(); return; }
+    const same = S.chapters.find((c) => c.lane === lane && c.label.toLowerCase() === label.toLowerCase());
+    if (same) { close(); onCreated(same); return; }
+    if (CHAPTERS.some((c) => c.label.toLowerCase() === label.toLowerCase())) { toast(`"${label}" is already a chapter. Pick it from the list.`, 4000); return; }
+    create.disabled = true;
+    try {
+      const c = await store.addChapter({ label, lane });
+      S.chapters.push(c);
+      close();
+      onCreated(c);
+      toast(`Chapter "${label}" created`);
+    } catch (e) { create.disabled = false; toast('Could not create the chapter: ' + (e.message || 'error'), 5000); }
+  };
+  create.addEventListener('click', go);
+  name.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  close = sheet('New chapter', h('div', null,
+    field('Chapter name', name, h('div', { class: 'hint' }, `It goes on ${where}, placed by the dates of its memories. You can rename or delete it in Settings.`)),
+    create));
+  setTimeout(() => name.focus(), 250);
 }
 
 // ------------------------------------------------------------------ notes

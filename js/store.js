@@ -81,15 +81,17 @@ function createLive() {
     async signOut() { localStorage.removeItem('sigurls'); await sb.auth.signOut(); },
 
     async loadAll() {
-      const [memories, reactions, settingsRows, members] = await Promise.all([
+      const [memories, reactions, settingsRows, members, chapters] = await Promise.all([
         fetchAll('memories', 'taken_on'),
         fetchAll('reactions', 'memory_id'),
         sb.from('settings').select('*').then((r) => { if (r.error) throw r.error; return r.data; }),
-        sb.from('members').select('*').then((r) => { if (r.error) throw r.error; return r.data; })
+        sb.from('members').select('*').then((r) => { if (r.error) throw r.error; return r.data; }),
+        // Older databases may not have the chapters table yet (re-run schema.sql to add it).
+        sb.from('chapters').select('*').order('created_at').then((r) => { if (r.error) { console.warn('Own chapters unavailable:', r.error.message); return []; } return r.data; })
       ]);
       const settings = {};
       for (const r of settingsRows) settings[r.key] = r.value;
-      return { memories, reactions, settings, members };
+      return { memories, reactions, settings, members, chapters };
     },
 
     imageUrl(path) {
@@ -165,6 +167,20 @@ function createLive() {
       if (error) throw error;
     },
 
+    async addChapter({ label, lane }) {
+      const { data, error } = await sb.from('chapters').insert({ label, lane }).select().single();
+      if (error) throw error;
+      return data;
+    },
+    async renameChapter(id, label) {
+      const { error } = await sb.from('chapters').update({ label }).eq('id', id);
+      if (error) throw error;
+    },
+    async deleteChapter(id) {
+      const { error } = await sb.from('chapters').delete().eq('id', id);
+      if (error) throw error;
+    },
+
     async saveSettings(obj) {
       const rows = Object.entries(obj).map(([key, value]) => ({ key, value: value || null }));
       const { error } = await sb.from('settings').upsert(rows);
@@ -230,12 +246,13 @@ function createDemo() {
     { memory_id: 'd19', user_id: 'demo-a', emoji: '😂' }, { memory_id: 'd21', user_id: 'demo-b', emoji: '🥹' }
   ];
   const comments = {};
+  let chapters = [];
   return {
     mode: 'demo',
     get me() { return me; },
     async init() { return { state: 'ready' }; },
     async signIn() {}, async signOut() {},
-    async loadAll() { return { memories: memories.map((m) => ({ ...m })), reactions: reactions.map((r) => ({ ...r })), settings: { ...settings }, members: members.map((m) => ({ ...m })) }; },
+    async loadAll() { return { memories: memories.map((m) => ({ ...m })), reactions: reactions.map((r) => ({ ...r })), settings: { ...settings }, members: members.map((m) => ({ ...m })), chapters: chapters.map((c) => ({ ...c })) }; },
     imageUrl(path) { return Promise.resolve(path || null); },
     async addMemory(rec, blobs) {
       const m = { id: 'd' + (++n), created_at: new Date().toISOString(), created_by: me.id, people: [], event: null, caption: null, note_emoji: null, note_color: null, ...rec };
@@ -252,6 +269,9 @@ function createDemo() {
     async listComments(id) { return (comments[id] || []).slice(); },
     async addComment(id, body) { const c = { id: 'c' + Math.random(), memory_id: id, user_id: me.id, body, created_at: new Date().toISOString() }; (comments[id] = comments[id] || []).push(c); return c; },
     async deleteComment(id) { for (const k in comments) comments[k] = comments[k].filter((c) => c.id !== id); },
+    async addChapter({ label, lane }) { const c = { id: 'c' + (++n), label, lane, created_by: me.id, created_at: new Date().toISOString() }; chapters.push(c); return { ...c }; },
+    async renameChapter(id, label) { const c = chapters.find((x) => x.id === id); if (c) c.label = label; },
+    async deleteChapter(id) { chapters = chapters.filter((c) => c.id !== id); memories.forEach((m) => { if (m.custom_chapter === id) m.custom_chapter = null; }); },
     async saveSettings(obj) { Object.assign(settings, obj); },
     async renameMe(name) { me.name = name; members.find((m) => m.lane === 'a').name = name; }
   };
