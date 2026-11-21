@@ -25,7 +25,7 @@ export async function jpegInfo(file) {
       if (m === 0xFF) { o++; continue; }
       if (m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7)) { o += 2; continue; }
       const len = v.getUint16(o + 2);
-      if (m === 0xE1 && v.getUint32(o + 4) === 0x45786966) orient = exifOrientation(v, o + 10) || orient; // "Exif"
+      if (m === 0xE1 && v.getUint32(o + 4) === 0x45786966) orient = exifTags(v, o + 10).orient || orient; // "Exif"
       if ((m >= 0xC0 && m <= 0xCF) && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) {
         const h = v.getUint16(o + 5), w = v.getUint16(o + 7);
         return w && h ? { w, h, orient } : null;
@@ -35,15 +35,46 @@ export async function jpegInfo(file) {
   } catch (_) { /* unreadable header */ }
   return null;
 }
-function exifOrientation(v, t) {
-  const le = v.getUint16(t) === 0x4949;
-  const ifd = t + v.getUint32(t + 4, le);
-  const n = v.getUint16(ifd, le);
-  for (let i = 0; i < n; i++) {
-    const e = ifd + 2 + i * 12;
-    if (v.getUint16(e, le) === 0x0112) return v.getUint16(e + 8, le);
-  }
-  return 0;
+// Orientation and the date the photo was taken, from the EXIF block starting at t (TIFF header).
+function exifTags(v, t) {
+  const out = { orient: 0, date: null };
+  try {
+    const le = v.getUint16(t) === 0x4949;
+    const ascii = (e) => { // 19-char "YYYY:MM:DD HH:MM:SS"
+      const off = t + v.getUint32(e + 8, le);
+      let s = '';
+      for (let k = 0; k < 10; k++) s += String.fromCharCode(v.getUint8(off + k));
+      return /^\d{4}:\d{2}:\d{2}$/.test(s) && !s.startsWith('0000') ? s.replace(/:/g, '-') : null;
+    };
+    const walk = (ifd, fn) => { const n = v.getUint16(ifd, le); for (let i = 0; i < n; i++) fn(ifd + 2 + i * 12, v.getUint16(ifd + 2 + i * 12, le)); };
+    let sub = 0, modified = null;
+    walk(t + v.getUint32(t + 4, le), (e, tag) => {
+      if (tag === 0x0112) out.orient = v.getUint16(e + 8, le);
+      else if (tag === 0x8769) sub = v.getUint32(e + 8, le);
+      else if (tag === 0x0132) modified = ascii(e);
+    });
+    if (sub) walk(t + sub, (e, tag) => { if (tag === 0x9003 || (tag === 0x9004 && !out.date)) out.date = ascii(e) || out.date; });
+    out.date = out.date || modified;
+  } catch (_) { /* odd EXIF: ignore */ }
+  return out;
+}
+
+// The day the photo was taken (camera's EXIF date). Falls back to the file's date, which for copied,
+// downloaded or shared photos is the day it was copied, not taken.
+export async function photoDateISO(file) {
+  try {
+    const v = new DataView(await file.slice(0, 262144).arrayBuffer());
+    if (v.byteLength > 4 && v.getUint16(0) === 0xFFD8) {
+      let o = 2;
+      while (o + 10 < v.byteLength && v.getUint8(o) === 0xFF) {
+        const m = v.getUint8(o + 1), len = v.getUint16(o + 2);
+        if (m === 0xDA) break; // image data starts: no EXIF
+        if (m === 0xE1 && v.getUint32(o + 4) === 0x45786966) { const d = exifTags(v, o + 10).date; if (d) return d; break; }
+        o += 2 + len;
+      }
+    }
+  } catch (_) { /* fall back */ }
+  return fileDateISO(file);
 }
 
 // Big JPEG: ask Chrome for a ready-shrunk copy, so the full-size photo (a 15 MB file can be 400+ MB

@@ -74,12 +74,12 @@ export function renderTimeline(root, opts = {}) {
   const mem = S.memories.filter((m) => !inOwn.has(m.id));
   const ownAt = (homes, lanes) => groupsOwn.filter((g) => homes.includes(g.home) && (!lanes || lanes.includes(g.c.lane)));
   const ownCard = (g, small) => groupCard(g.c.label, g.mems, small, 'cc-' + g.c.id, g.c);
-  const byDate = (arr) => arr.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
+  const byDate = (arr) => arr.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : (y.head ? 1 : 0) - (x.head ? 1 : 0)));
   const by = (ch) => mem.filter((m) => m.chapter === ch);
   const childA = mem.filter((m) => m.chapter === 'childhood' && m.lane === 'a');
   const childB = mem.filter((m) => m.chapter === 'childhood' && m.lane === 'b');
   const meetups = by('meetups'), engagement = by('engagement'), wedding = by('wedding'), married = by('married'), baby = by('baby');
-  const seq = [...childA, ...childB, ...meetups, ...engagement, ...wedding, ...married, ...baby].map((m) => m.id);
+  const seq = [...childA, ...childB, ...meetups, ...engagement, ...wedding, ...S.memories.filter((m) => !inOwn.has(m.id) && (m.chapter === 'married' || m.chapter === 'baby'))].map((m) => m.id);
   const W = Math.min(window.innerWidth, 520) - 40;
   const motionOff = () => document.documentElement.dataset.motion === 'off';
   const jump = (id) => { const t = document.getElementById(id); if (t) t.scrollIntoView({ behavior: motionOff() ? 'auto' : 'smooth', block: 'start' }); };
@@ -162,18 +162,16 @@ export function renderTimeline(root, opts = {}) {
   const solo = h('div', { class: 'solo', id: 'ch-married' });
   let k = 0;
   // memories and your own chapters, in date order, alternating sides of the line
-  const rows = (arr, homes) => byDate([
-    ...arr.map((m) => ({ date: m.taken_on, el: () => card(m, seq) })),
-    ...ownAt(homes).map((g) => ({ date: g.date, el: () => ownCard(g) }))
-  ]).forEach((e) => solo.appendChild(h('div', { class: 'srow ' + (k++ % 2 ? 'r' : 'l') }, h('div', { class: 'c' }, e.el()))));
-  rows(married, ['wedding', 'married']);
+  // One date order for the whole line, whichever chapter a memory is in. "Baby arrives" sits at the baby's date.
   if (!married.length && !baby.length && !ownAt(['wedding', 'married', 'baby']).length) solo.appendChild(h('div', { style: 'padding:6px 0 18px;position:relative;z-index:2' }, emptyBtn('Your life together starts here. Add the first memory.')));
-  if (baby.length || S.settings.baby_date) {
-    const bd = S.settings.baby_date || baby[0].taken_on;
-    solo.appendChild(h('div', { class: 'babyhead', id: 'ch-baby' },
-      h('div', { class: 'node' }), h('div', { class: 'lab' }, 'BABY ARRIVES'), h('div', null, h('span', { class: 'sub' }, `${fmtDate(bd)} · ${sinceLabel(bd)} old`))));
-    rows(baby, ['baby']);
-  } else rows([], ['baby']);
+  const bd = S.settings.baby_date || (baby[0] && baby[0].taken_on);
+  const babyHead = bd ? [{ date: bd, head: true, el: () => h('div', { class: 'babyhead', id: 'ch-baby' },
+    h('div', { class: 'node' }), h('div', { class: 'lab' }, 'BABY ARRIVES'), h('div', null, h('span', { class: 'sub' }, `${fmtDate(bd)} · ${sinceLabel(bd)} old`))) }] : [];
+  byDate([
+    ...[...married, ...baby].map((m) => ({ date: m.taken_on, el: () => card(m, seq) })),
+    ...ownAt(['wedding', 'married', 'baby']).map((g) => ({ date: g.date, el: () => ownCard(g) })),
+    ...babyHead
+  ]).forEach((e) => solo.appendChild(e.head ? e.el() : h('div', { class: 'srow ' + (k++ % 2 ? 'r' : 'l') }, h('div', { class: 'c' }, e.el()))));
   const future = h('div', { class: 'stage' }, h('div', { class: 'future' }, h('button', { class: 'btn ghost', type: 'button', onClick: openAddChooser }, '+ Add a photo or a note')));
 
   const tl = h('div', { class: 'tl' }, top, childhood, meet, meetMore, drift, engage, merge, wed, h('div', { class: 'stage' }, solo), future);
