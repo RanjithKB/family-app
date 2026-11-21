@@ -39,6 +39,17 @@ create table if not exists public.memories (
 );
 create index if not exists memories_taken_idx on public.memories (taken_on);
 
+-- Your own chapters (e.g. "College", "First home"), on top of the built-in ones.
+-- A memory keeps its built-in chapter too, so it falls back there if its own chapter is deleted.
+create table if not exists public.chapters (
+  id         uuid primary key default gen_random_uuid(),
+  label      text not null check (char_length(label) between 1 and 40),
+  lane       text not null check (lane in ('a', 'b', 'together')),
+  created_by uuid not null default auth.uid() references auth.users(id),
+  created_at timestamptz not null default now()
+);
+alter table public.memories add column if not exists custom_chapter uuid references public.chapters(id) on delete set null;
+
 create table if not exists public.reactions (
   memory_id uuid not null references public.memories(id) on delete cascade,
   user_id   uuid not null default auth.uid() references auth.users(id),
@@ -73,6 +84,7 @@ alter table public.settings  enable row level security;
 alter table public.memories  enable row level security;
 alter table public.reactions enable row level security;
 alter table public.comments  enable row level security;
+alter table public.chapters  enable row level security;
 
 drop policy if exists members_read   on public.members;
 drop policy if exists members_update on public.members;
@@ -119,6 +131,20 @@ create policy comments_insert on public.comments for insert to authenticated
   with check (public.is_member() and user_id = auth.uid());
 create policy comments_delete on public.comments for delete to authenticated
   using (public.is_member() and user_id = auth.uid());
+
+-- Chapters: both can read and add. Only the person who made one can rename or delete it.
+drop policy if exists chapters_read   on public.chapters;
+drop policy if exists chapters_insert on public.chapters;
+drop policy if exists chapters_update on public.chapters;
+drop policy if exists chapters_delete on public.chapters;
+create policy chapters_read   on public.chapters for select to authenticated using (public.is_member());
+create policy chapters_insert on public.chapters for insert to authenticated
+  with check (public.is_member() and created_by = auth.uid());
+create policy chapters_update on public.chapters for update to authenticated
+  using (public.is_member() and created_by = auth.uid())
+  with check (public.is_member() and created_by = auth.uid());
+create policy chapters_delete on public.chapters for delete to authenticated
+  using (public.is_member() and created_by = auth.uid());
 
 -- ---------------------------------------------------------------------
 --  Private photo storage

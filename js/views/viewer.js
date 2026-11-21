@@ -1,8 +1,8 @@
 // Photo / note viewer: full photo, age label, reactions, comments, and author-only edit and delete.
 import { h, page, confirmBox, toast, lazyImg, ICON, REACTIONS, clear } from '../ui.js';
 import { store } from '../store.js';
-import { S, byId, mine, laneName, reactionInfo, setReactionLocal, reload, onChange } from '../state.js';
-import { fmtDate, chapterLabel, ageLabel, NOTE_COLORS } from '../dates.js';
+import { S, byId, mine, laneName, reactionInfo, setReactionLocal, reload, onChange, chapterName } from '../state.js';
+import { fmtDate, ageLabel, NOTE_COLORS } from '../dates.js';
 import { openNoteForm, openPhotoEdit } from './add.js';
 
 export function openViewer(startId, ids) {
@@ -45,7 +45,7 @@ export function openViewer(startId, ids) {
     const age = ageLabel(m, S.settings, S.names);
     body.appendChild(h('div', { class: 'row', style: 'flex-wrap:wrap;gap:8px' },
       age ? h('span', { class: 'tag' }, age) : null,
-      h('span', { class: 'small muted' }, `${fmtDate(m.taken_on, m.precision)} · ${chapterLabel(m.chapter)}${m.lane === 'together' ? '' : ' · ' + laneName(m.lane)}`)));
+      h('span', { class: 'small muted' }, `${fmtDate(m.taken_on, m.precision)} · ${chapterName(m)}${m.lane === 'together' ? '' : ' · ' + laneName(m.lane)}`)));
 
     if (isPhoto) {
       if (m.caption) body.appendChild(h('h1', { class: 'vcap' }, m.caption));

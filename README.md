@@ -8,6 +8,7 @@ Free to run: Supabase free tier for sign-in, database and photos, Cloudflare Pag
 
 ## Features
 - Two-lane timeline that merges at the wedding, with a swipeable carousel per wedding event
+- Your own chapters (e.g. College, First home) next to the built-in ones, placed on the timeline by date
 - Photos and caption-only notes (with emojis), optional captions, reactions
 - Author-only edit/delete, "age at photo" tag, crop at upload (4:5 thumbnail, full photo kept for viewing)
 - Share photos straight from the Android gallery into the app
@@ -27,6 +28,9 @@ Drag the folder onto Cloudflare Pages (Workers & Pages > Create > Pages > Upload
 6. **Connect.** In `js/config.js` set `DEMO_MODE: false` and paste `SUPABASE_URL` and `SUPABASE_ANON_KEY` (Project settings > API). The anon key is designed to be public; row-level security limits everything to your two member emails.
 7. **Deploy.** Upload the folder to Cloudflare Pages again. Open it on both phones, sign in, then Chrome menu > Install app.
 8. **Lock it down.** Turn on Google 2-step verification for both accounts. It is the real lock on your photos.
+
+## Updating an existing setup
+`supabase/schema.sql` is safe to run again: it only adds what's missing. After pulling a new version, run it once more in the Supabase SQL Editor (for example, to add the table for your own chapters).
 
 ## Keeping your setup out of git
 If your copy of the repo is public, don't commit your real `js/config.js` values, `supabase/members.sql` or any keys. `scripts/check-secrets.sh` blocks real Supabase URLs/keys, `DEMO_MODE: false`, service_role / secret keys, Google client secrets, private keys, GitHub tokens and real emails. It runs in two places:

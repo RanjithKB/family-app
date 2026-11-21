@@ -1,5 +1,5 @@
 // Service worker: caches the app shell and receives photos shared from the Android gallery.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL = `shell-${VERSION}`;
 const SHARED = 'shared-files';
 const FILES = [
