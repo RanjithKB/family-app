@@ -112,7 +112,7 @@ function cropFlow(files) {
     const loading = h('div', { class: 'cropbox sk', style: 'width:300px;height:375px' });
     holder.appendChild(loading);
     let L;
-    try { L = await loadImage(items[i].file); } catch (e) { toast(e.message); next(null); return; }
+    try { L = await loadImage(items[i].file); } catch (e) { items[i].bad = e.message; next(); return; }
     cleanup(); current = L;
     const fw = Math.min(innerWidth - 40, 340), fh = fw * 1.25;
     const st = { mode: 'fill', s: 1, tx: 0, ty: 0 };
@@ -188,7 +188,13 @@ function cropFlow(files) {
   }
   function next() { cleanup(); if (idx + 1 < items.length) show(idx + 1); else details(); }
 
-  function details() { openDetails(items, () => { cleanup(); }); }
+  function details() {
+    const ok = items.filter((x) => !x.bad);
+    const bad = items.filter((x) => x.bad);
+    if (!ok.length) { cleanup(); close(); toast(bad.length > 1 ? `None of these photos could be opened. ${bad[0].bad}` : bad[0].bad, 8000); return; }
+    if (bad.length) toast(`${bad.length} photo${bad.length > 1 ? 's' : ''} skipped. ${bad[0].bad}`, 8000);
+    openDetails(ok, () => { cleanup(); });
+  }
   show(0);
 }
 
@@ -257,10 +263,12 @@ function openDetails(items, onDone) {
     const g = df.get();
     const ppl = people.value.split(',').map((s) => s.trim()).filter(Boolean);
     let done = 0;
+    const skipped = [];
     try {
       for (const it of items) {
-        msg.textContent = `Photo ${done + 1} of ${items.length}`;
-        const L = await loadImage(it.file);
+        msg.textContent = `Photo ${done + skipped.length + 1} of ${items.length}`;
+        let L;
+        try { L = await loadImage(it.file); } catch (e) { skipped.push(e.message); continue; }
         try {
           const thumb = await makeThumb(L.img, L.w, L.h, it.crop);
           const disp = await makeDisplay(L.img, L.w, L.h);
@@ -274,13 +282,20 @@ function openDetails(items, onDone) {
           await store.addMemory(rec, { thumb, display: disp.blob });
         } finally { URL.revokeObjectURL(L.url); }
         done++;
-        prog.style.width = Math.round((done / items.length) * 100) + '%';
+        prog.style.width = Math.round(((done + skipped.length) / items.length) * 100) + '%';
+      }
+      if (!done) {
+        box.remove();
+        save.disabled = false;
+        toast(skipped[0], 8000);
+        return;
       }
       await reload();
       box.remove();
       closeAllLayers();
       if (onDone) onDone();
-      toast(done === 1 ? 'Added to your story' : `Added ${done} photos`);
+      const added = done === 1 ? 'Added to your story' : `Added ${done} photos`;
+      toast(skipped.length ? `${added}. ${skipped.length} skipped: ${skipped[0]}` : added, skipped.length ? 8000 : 2600);
     } catch (e) {
       box.remove();
       save.disabled = false;

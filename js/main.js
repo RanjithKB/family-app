@@ -75,6 +75,7 @@ async function ready() {
   try { await reload(); } catch (e) { centerScreen(h('p', null, 'Could not load. Check your connection.'), h('button', { class: 'btn', type: 'button', onClick: () => location.reload() }, 'Try again')); return; }
   shell();
   onChange(render);
+  if (store.mode === 'demo') toast('Demo mode: sample data only. Anything you add is gone after a refresh.', 6000);
 
   const shared = new URLSearchParams(location.search).get('shared');
   if (shared) {
