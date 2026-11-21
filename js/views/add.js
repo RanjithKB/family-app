@@ -3,7 +3,7 @@ import { h, page, sheet, closeAllLayers, toast, ICON, EMOJIS, clear, lazyImg } f
 import { store } from '../store.js';
 import { S, reload, laneName, mine } from '../state.js';
 import { CHAPTERS, WEDDING_EVENTS, PRECISIONS, NOTE_COLORS, todayISO, normalizeDate, suggestChapter, fmtDate } from '../dates.js';
-import { loadImage, makeCopies, fileDateISO } from '../images.js';
+import { loadImage, makeCopies, photoDateISO } from '../images.js';
 
 const lanes = () => [
   { id: 'a', label: S.names.a, cls: '' },
@@ -198,7 +198,8 @@ function cropFlow(files) {
   }
   function next() { cleanup(); if (idx + 1 < items.length) show(idx + 1); else details(); }
 
-  function details() {
+  async function details() {
+    await Promise.all(items.map(async (x) => { if (!x.bad) x.date = await photoDateISO(x.file); }));
     const ok = items.filter((x) => !x.bad);
     const bad = items.filter((x) => x.bad);
     if (!ok.length) { cleanup(); close(); toast(bad.length > 1 ? `None of these photos could be opened. ${bad[0].bad}` : bad[0].bad, 8000); return; }
@@ -213,7 +214,7 @@ function openDetails(items, onDone) {
   const settings = S.settings;
   const form = { lane: store.me.lane, chapter: null, chapterTouched: false, custom: null, event: 'ceremony', people: [] };
   const df = dateField({ photoMode: true });
-  const firstDate = fileDateISO(items[0].file);
+  const firstDate = items[0].date;
   const holder = h('div', { class: 'inner' });
   const { el, close } = page(holder);
 
@@ -287,7 +288,7 @@ function openDetails(items, onDone) {
           try { copies = await makeCopies(L, it.crop); } catch (e) { skipped.push(e.message); continue; } finally { L.release(); }
         }
         {
-          const iso = g.photo ? fileDateISO(it.file) : g.iso;
+          const iso = g.photo ? it.date : g.iso;
           const chapter = form.chapterTouched ? form.chapter : suggestChapter(form.lane, iso, settings);
           const rec = {
             kind: 'photo', lane: form.lane, chapter, event: !form.custom && chapter === 'wedding' ? form.event : null,
