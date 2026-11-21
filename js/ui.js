@@ -1,6 +1,28 @@
 // Tiny UI toolkit: element builder, icons, layers (with Android back-button support), toast, lazy images.
 import { store } from './store.js';
 
+// Newer emojis show as an empty box on older phones (🥹 needs Android 12+).
+// If this phone can't draw one, show a close older emoji instead. Saved data is never changed.
+const EMOJI_FALLBACK = { '🥹': '🥺' };
+function canDraw(e) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 24;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.textBaseline = 'top';
+    x.font = '18px sans-serif';
+    x.fillStyle = '#000';
+    x.fillText(e, 0, 0);
+    const d = x.getImageData(0, 0, 24, 24).data;
+    // A real emoji has colour; the empty-box glyph is drawn in plain black.
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 50 && (Math.abs(d[i] - d[i + 1]) > 30 || Math.abs(d[i + 1] - d[i + 2]) > 30)) return true;
+    return false;
+  } catch (_) { return true; }
+}
+const missing = Object.keys(EMOJI_FALLBACK).filter((e) => !canDraw(e));
+const missingRe = missing.length ? new RegExp(missing.join('|'), 'gu') : null;
+export const showEmoji = (s) => (missingRe ? s.replace(missingRe, (m) => EMOJI_FALLBACK[m]) : s);
+
 export function h(tag, props, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
@@ -15,7 +37,7 @@ export function h(tag, props, ...kids) {
   const add = (c) => {
     if (c == null || c === false) return;
     if (Array.isArray(c)) c.forEach(add);
-    else el.appendChild(c.nodeType ? c : document.createTextNode(String(c)));
+    else el.appendChild(c.nodeType ? c : document.createTextNode(showEmoji(String(c))));
   };
   kids.forEach(add);
   return el;
