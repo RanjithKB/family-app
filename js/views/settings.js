@@ -19,6 +19,9 @@ export function openSettings() {
     dateField(`${S.names.a}'s birthday`, 'birth_a'),
     dateField(`${S.names.b}'s birthday`, 'birth_b')
   ];
+  // Optional: shown in birthday wishes ("Happy 1st birthday, Kashvi!")
+  const babyName = h('input', { class: 'input', type: 'text', maxlength: 30, value: S.settings.baby_name || '', placeholder: 'e.g. Kashvi' });
+  fields.splice(2, 0, { key: 'baby_name', i: babyName, el: h('label', { class: 'field' }, h('span', { class: 'lbl' }, "Baby's name (optional)"), babyName) });
   const motion = getMotion();
   const seg = h('div', { class: 'chips' }, [['smooth', 'Smooth'], ['light', 'Light'], ['off', 'Off']].map(([id, l]) =>
     h('button', { class: 'chip' + (id === motion ? ' on' : ''), type: 'button', onClick: (e) => {
