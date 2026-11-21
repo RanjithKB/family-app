@@ -99,7 +99,7 @@ function cropFlow(files) {
   el.classList.add('crop-dark');
   let idx = 0, current = null;
 
-  const cleanup = () => { if (current) { URL.revokeObjectURL(current.url); current = null; } };
+  const cleanup = () => { if (current) { current.release(); current = null; } };
 
   async function show(i) {
     idx = i;
@@ -116,7 +116,10 @@ function cropFlow(files) {
     cleanup(); current = L;
     const fw = Math.min(innerWidth - 40, 340), fh = fw * 1.25;
     const st = { mode: 'fill', s: 1, tx: 0, ty: 0 };
-    const image = h('img', { src: L.url, alt: '', style: `width:${L.w}px;height:${L.h}px` });
+    const image = L.img; // the small working copy, shown directly (no second decode)
+    image.className = 'cropimg';
+    image.setAttribute('aria-hidden', 'true');
+    image.style.cssText = `width:${L.w}px;height:${L.h}px`;
     const box = h('div', { class: 'cropbox', style: `width:${fw}px;height:${fh}px` }, image, h('div', { class: 'grid' }));
     const minS = () => (st.mode === 'fill' ? Math.max(fw / L.w, fh / L.h) : Math.min(fw / L.w, fh / L.h));
     const apply = () => {
@@ -284,7 +287,7 @@ function openDetails(items, onDone) {
             people: ppl, width: disp.width, height: disp.height
           };
           await store.addMemory(rec, { thumb, display: disp.blob });
-        } finally { URL.revokeObjectURL(L.url); }
+        } finally { L.release(); }
         done++;
         prog.style.width = Math.round(((done + skipped.length) / items.length) * 100) + '%';
       }
