@@ -19,8 +19,8 @@ export const CONFIG = {
   BUCKET: 'photos',
 
   // Image sizes
-  THUMB_W: 480,        // timeline thumbnail, 4:5
-  THUMB_H: 600,
+  THUMB_W: 720,        // timeline thumbnail, 4:5 (sharp enough for the big wedding carousel)
+  THUMB_H: 900,
   DISPLAY_MAX: 1600,   // longest edge of the photo-view copy
   WEBP_QUALITY: 0.82
 };
